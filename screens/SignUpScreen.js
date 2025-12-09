@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,20 +18,52 @@ export default function SignUpScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const getErrorMessage = (errorCode) => {
+    switch (errorCode) {
+      case 'auth/email-already-in-use':
+        return 'This email is already registered. Please sign in instead.';
+      case 'auth/invalid-email':
+        return 'Please enter a valid email address.';
+      case 'auth/operation-not-allowed':
+        return 'Email/password accounts are not enabled. Please contact support.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Please choose a stronger password.';
+      case 'auth/network-request-failed':
+        return 'Network error. Please check your internet connection.';
+      case 'permission-denied':
+        return 'Permission denied. Please try again.';
+      default:
+        return 'An error occurred. Please try again.';
+    }
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSignUp = async () => {
+    setError(''); // Clear any previous errors
+
     if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      setError('Password must be at least 6 characters');
       return;
     }
 
@@ -51,7 +82,9 @@ export default function SignUpScreen({ navigation }) {
 
       // Navigation will happen automatically via auth state change
     } catch (error) {
-      Alert.alert('Sign Up Error', error.message);
+      const errorMessage = getErrorMessage(error.code);
+      setError(errorMessage);
+      console.error('Sign up error:', error);
     } finally {
       setLoading(false);
     }
@@ -68,12 +101,21 @@ export default function SignUpScreen({ navigation }) {
           <Text style={styles.subtitle}>Sign up to get started</Text>
 
           <View style={styles.form}>
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
             <TextInput
               style={styles.input}
               placeholder="Email"
               placeholderTextColor="#999"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError(''); // Clear error when user types
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -84,7 +126,10 @@ export default function SignUpScreen({ navigation }) {
               placeholder="Password"
               placeholderTextColor="#999"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                setError(''); // Clear error when user types
+              }}
               secureTextEntry
               autoCapitalize="none"
               autoComplete="password-new"
@@ -95,7 +140,10 @@ export default function SignUpScreen({ navigation }) {
               placeholder="Confirm Password"
               placeholderTextColor="#999"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setError(''); // Clear error when user types
+              }}
               secureTextEntry
               autoCapitalize="none"
               autoComplete="password-new"
