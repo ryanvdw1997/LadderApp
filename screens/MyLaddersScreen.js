@@ -27,11 +27,11 @@ export default function MyLaddersScreen({ navigation }) {
       }
 
       // Query ladders where user is a member
-      // Note: Firestore requires an index for array-contains + orderBy
-      // For now, we'll fetch and sort in memory
+      // Use memberIds array (denormalized) for efficient querying
+      // Fallback to memberList for backward compatibility with old format
       const q = query(
         collection(db, 'ladders'),
-        where('memberList', 'array-contains', user.uid)
+        where('memberIds', 'array-contains', user.uid)
       );
 
       const querySnapshot = await getDocs(q);

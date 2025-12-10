@@ -61,6 +61,12 @@ export default StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 12,
   },
+  inputHint: {
+    fontSize: 13,
+    color: '#8B8FA8',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
   input: {
     backgroundColor: '#1A1F3A',
     borderRadius: 16,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   SafeAreaView,
   Image,
 } from 'react-native';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/CreateLadderScreen.styles';
 
@@ -18,12 +18,42 @@ export default function CreateLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis'); // 'tennis' or 'pickleball'
   const [teamType, setTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
+  const [nickname, setNickname] = useState('');
+  const [userFirstName, setUserFirstName] = useState('');
+  const [userLastName, setUserLastName] = useState('');
   const [isPublic, setIsPublic] = useState(true); // true = public (1), false = private (0)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Fetch user data to get firstName and lastName for default nickname
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        // Query users collection to find the current user's document
+        const q = query(
+          collection(db, 'users'),
+          where('uid', '==', user.uid)
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data();
+          setUserFirstName(userData.firstName || '');
+          setUserLastName(userData.lastName || '');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
   // Generate a random 5-character code (letters and digits)
-  const generateRequestCode = () => {
+  const generateJoinCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let code = '';
     for (let i = 0; i < 5; i++) {
@@ -33,8 +63,8 @@ export default function CreateLadderScreen({ navigation }) {
   };
 
   // Generate a unique request code by checking Firestore
-  const generateUniqueRequestCode = async () => {
-    let code = generateRequestCode();
+  const generateUniqueJoinCode = async () => {
+    let code = generateJoinCode();
     let isUnique = false;
     let attempts = 0;
     const maxAttempts = 50; // Prevent infinite loops
@@ -43,7 +73,7 @@ export default function CreateLadderScreen({ navigation }) {
       // Check if code already exists in Firestore
       const q = query(
         collection(db, 'ladders'),
-        where('requestCode', '==', code)
+        where('joinCode', '==', code)
       );
       const querySnapshot = await getDocs(q);
 
@@ -52,7 +82,7 @@ export default function CreateLadderScreen({ navigation }) {
         isUnique = true;
       } else {
         // Code exists, generate a new one
-        code = generateRequestCode();
+        code = generateJoinCode();
         attempts++;
       }
     }
@@ -86,17 +116,34 @@ export default function CreateLadderScreen({ navigation }) {
       }
 
       // Generate unique request code
-      const requestCode = await generateUniqueRequestCode();
+      const joinCode = await generateUniqueJoinCode();
+
+      // Determine nickname (use provided or default to firstName + lastName, or 'Player')
+      const defaultName = (userFirstName && userLastName) 
+        ? `${userFirstName} ${userLastName}`.trim()
+        : (userFirstName || userLastName || 'Player');
+      const finalNickname = nickname.trim() || defaultName;
+      
+      // Create member object with userId, nickname, points, and rank
+      const memberObject = {
+        userId: user.uid,
+        nickname: finalNickname,
+        points: 0,
+        rank: 0,
+      };
 
       // Create ladder document in Firestore
+      // memberList: array of objects with full member info
+      // memberIds: array of UIDs for Firestore security rules (denormalized)
       await addDoc(collection(db, 'ladders'), {
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
         adminList: [user.uid],
-        memberList: [user.uid],
+        memberList: [memberObject],
+        memberIds: [user.uid], // Denormalized array for security rules
         public: isPublic ? 1 : 0,
-        requestCode: requestCode,
+        joinCode: joinCode,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
       });
@@ -151,6 +198,27 @@ export default function CreateLadderScreen({ navigation }) {
                   setError('');
                 }}
                 maxLength={50}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Your Nickname (Optional)</Text>
+              <Text style={styles.inputHint}>
+                {nickname.trim() 
+                  ? `Using: "${nickname.trim()}"` 
+                  : `Will default to: "${(userFirstName + ' ' + userLastName).trim() || 'Player'}"`}
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder={(userFirstName && userLastName) ? `${userFirstName} ${userLastName}` : 'Player'}
+                placeholderTextColor="#8B8FA8"
+                value={nickname}
+                onChangeText={(text) => {
+                  setNickname(text);
+                  setError('');
+                }}
+                maxLength={30}
                 autoCapitalize="words"
               />
             </View>
