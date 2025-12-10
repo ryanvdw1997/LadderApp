@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/MyLaddersScreen.styles';
@@ -16,12 +17,9 @@ export default function MyLaddersScreen({ navigation }) {
   const [ladders, setLadders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLadders();
-  }, []);
-
   const fetchLadders = async () => {
     try {
+      setLoading(true);
       const user = auth.currentUser;
       if (!user) {
         setLoading(false);
@@ -62,6 +60,13 @@ export default function MyLaddersScreen({ navigation }) {
       setLoading(false);
     }
   };
+
+  // Refetch ladders whenever the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchLadders();
+    }, [])
+  );
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown date';
@@ -104,9 +109,20 @@ export default function MyLaddersScreen({ navigation }) {
     }
   };
 
-  const handleLadderPress = (ladder) => {
+  const handleViewLadder = (ladder) => {
     // Navigate to ladder details (to be implemented later)
-    console.log('Ladder pressed:', ladder.id);
+    console.log('View ladder:', ladder.id);
+  };
+
+  const handleEditLadder = (ladder) => {
+    // Navigate to edit ladder screen (to be implemented later)
+    console.log('Edit ladder:', ladder.id);
+  };
+
+  const handleDeleteLadder = (ladder) => {
+    // Delete ladder functionality (to be implemented later)
+    console.log('Delete ladder:', ladder.id);
+    // TODO: Add confirmation dialog and delete logic
   };
 
   if (loading) {
@@ -122,12 +138,20 @@ export default function MyLaddersScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={() => navigation.navigate('CreateLadder')}
+          >
+            <Text style={styles.createButtonText}>Create Ladder</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.title}>My Ladders</Text>
         <Text style={styles.subtitle}>
           {ladders.length} {ladders.length === 1 ? 'ladder' : 'ladders'}
@@ -155,43 +179,69 @@ export default function MyLaddersScreen({ navigation }) {
           </View>
         ) : (
           ladders.map((ladder) => (
-            <TouchableOpacity
-              key={ladder.id}
-              style={styles.ladderCard}
-              onPress={() => handleLadderPress(ladder)}
-            >
-              <View style={styles.ladderCardHeader}>
-                <Text style={styles.ladderName}>{ladder.name}</Text>
+            <View key={ladder.id} style={styles.ladderCard}>
+              <TouchableOpacity
+                style={styles.ladderCardContent}
+                onPress={() => handleViewLadder(ladder)}
+              >
+                <View style={styles.ladderCardHeader}>
+                  <Text style={styles.ladderName}>{ladder.name}</Text>
+                  {ladder.isAdmin && (
+                    <View style={styles.adminBadge}>
+                      <Text style={styles.adminBadgeText}>Admin</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.ladderDate}>
+                  {formatDate(ladder.createdAt)}
+                </Text>
+
+                <View style={styles.ladderIcons}>
+                  {ladder.type && (
+                    <View style={styles.iconContainer}>
+                      <Image
+                        source={getGameTypeIcon(ladder.type)}
+                        style={styles.gameTypeIcon}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                  {ladder.teamType && (
+                    <View style={styles.iconContainer}>
+                      <Text style={styles.teamTypeIcon}>
+                        {getTeamTypeIcon(ladder.teamType)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleViewLadder(ladder)}
+                >
+                  <Text style={styles.actionButtonIcon}>👁️</Text>
+                </TouchableOpacity>
                 {ladder.isAdmin && (
-                  <View style={styles.adminBadge}>
-                    <Text style={styles.adminBadgeText}>Admin</Text>
-                  </View>
+                  <>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditLadder(ladder)}
+                    >
+                      <Text style={styles.actionButtonIcon}>✏️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.deleteButton]}
+                      onPress={() => handleDeleteLadder(ladder)}
+                    >
+                      <Text style={styles.actionButtonIcon}>🗑️</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
-
-              <Text style={styles.ladderDate}>
-                {formatDate(ladder.createdAt)}
-              </Text>
-
-              <View style={styles.ladderIcons}>
-                {ladder.type && (
-                  <View style={styles.iconContainer}>
-                    <Image
-                      source={getGameTypeIcon(ladder.type)}
-                      style={styles.gameTypeIcon}
-                      resizeMode="contain"
-                    />
-                  </View>
-                )}
-                {ladder.teamType && (
-                  <View style={styles.iconContainer}>
-                    <Text style={styles.teamTypeIcon}>
-                      {getTeamTypeIcon(ladder.teamType)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
+            </View>
           ))
         )}
       </ScrollView>

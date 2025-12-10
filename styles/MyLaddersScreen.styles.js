@@ -29,13 +29,40 @@ export default StyleSheet.create({
       },
     }),
   },
-  backButton: {
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  backButton: {
   },
   backButtonText: {
     fontSize: 16,
     color: '#6C5CE7',
     fontWeight: '600',
+  },
+  createButton: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   title: {
     fontSize: 32,
@@ -103,10 +130,10 @@ export default StyleSheet.create({
   ladderCard: {
     backgroundColor: '#1A1F3A',
     borderRadius: 16,
-    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#252A45',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -118,6 +145,9 @@ export default StyleSheet.create({
         elevation: 4,
       },
     }),
+  },
+  ladderCardContent: {
+    padding: 20,
   },
   ladderCardHeader: {
     flexDirection: 'row',
@@ -175,5 +205,39 @@ export default StyleSheet.create({
   },
   teamTypeIcon: {
     fontSize: 20,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#252A45',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: 'flex-end',
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#252A45',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  deleteButton: {
+    backgroundColor: '#3A1F1F',
+  },
+  actionButtonIcon: {
+    fontSize: 18,
   },
 });
