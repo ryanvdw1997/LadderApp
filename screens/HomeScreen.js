@@ -11,8 +11,6 @@ import { auth } from '../firebase.config';
 import styles from '../styles/HomeScreen.styles';
 
 export default function HomeScreen({ navigation }) {
-  const [activeTab, setActiveTab] = useState('My Ladders');
-
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -21,56 +19,29 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const tabs = ['My Ladders', 'Ladder Invites', 'Requests'];
-
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'My Ladders':
-        return (
-          <View style={styles.tabContent}>
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateEmoji}>🏆</Text>
-              <Text style={styles.emptyStateTitle}>No Ladders Yet</Text>
-              <Text style={styles.emptyStateText}>
-                Create or join a ladder to start competing!
-              </Text>
-              <TouchableOpacity 
-                style={styles.primaryButton}
-                onPress={() => navigation.navigate('CreateLadder')}
-              >
-                <Text style={styles.primaryButtonText}>Create Ladder</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      case 'Ladder Invites':
-        return (
-          <View style={styles.tabContent}>
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateEmoji}>📨</Text>
-              <Text style={styles.emptyStateTitle}>No Invites</Text>
-              <Text style={styles.emptyStateText}>
-                You don't have any pending ladder invitations.
-              </Text>
-            </View>
-          </View>
-        );
-      case 'Requests':
-        return (
-          <View style={styles.tabContent}>
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateEmoji}>🔔</Text>
-              <Text style={styles.emptyStateTitle}>No Requests</Text>
-              <Text style={styles.emptyStateText}>
-                Your ladder join requests will appear here.
-              </Text>
-            </View>
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
+  const menuButtons = [
+    { 
+      label: 'My Ladders', 
+      onPress: () => navigation.navigate('MyLadders'),
+      icon: '🏆'
+    },
+    { 
+      label: 'Ladder Invites', 
+      onPress: () => {
+        // Navigate to invites screen (to be implemented)
+        console.log('Navigate to invites');
+      },
+      icon: '📨'
+    },
+    { 
+      label: 'Requests', 
+      onPress: () => {
+        // Navigate to requests screen (to be implemented)
+        console.log('Navigate to requests');
+      },
+      icon: '🔔'
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -103,32 +74,21 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
-      <View style={styles.tabsContainer}>
-        {tabs.map((tab) => (
+      <View style={styles.buttonsContainer}>
+        {menuButtons.map((button, index) => (
           <TouchableOpacity
-            key={tab}
+            key={button.label}
             style={[
-              styles.tab,
-              activeTab === tab && styles.tabActive,
+              styles.menuButton,
+              index === menuButtons.length - 1 && styles.menuButtonLast,
             ]}
-            onPress={() => setActiveTab(tab)}
+            onPress={button.onPress}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.tabTextActive,
-              ]}
-            >
-              {tab}
-            </Text>
-            {activeTab === tab && <View style={styles.tabIndicator} />}
+            <Text style={styles.menuButtonIcon}>{button.icon}</Text>
+            <Text style={styles.menuButtonText}>{button.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderTabContent()}
-      </ScrollView>
 
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutButtonText}>Sign Out</Text>

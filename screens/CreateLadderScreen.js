@@ -8,17 +8,61 @@ import {
   Platform,
   ScrollView,
   SafeAreaView,
+  Image,
 } from 'react-native';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/CreateLadderScreen.styles';
 
 export default function CreateLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis'); // 'tennis' or 'pickleball'
+  const [teamType, setTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
   const [isPublic, setIsPublic] = useState(true); // true = public (1), false = private (0)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Generate a random 5-character code (letters and digits)
+  const generateRequestCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 5; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  // Generate a unique request code by checking Firestore
+  const generateUniqueRequestCode = async () => {
+    let code = generateRequestCode();
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 50; // Prevent infinite loops
+
+    while (!isUnique && attempts < maxAttempts) {
+      // Check if code already exists in Firestore
+      const q = query(
+        collection(db, 'ladders'),
+        where('requestCode', '==', code)
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        // Code is unique
+        isUnique = true;
+      } else {
+        // Code exists, generate a new one
+        code = generateRequestCode();
+        attempts++;
+      }
+    }
+
+    if (attempts >= maxAttempts) {
+      throw new Error('Unable to generate unique code. Please try again.');
+    }
+
+    return code;
+  };
 
   const handleCreateLadder = async () => {
     setError(''); // Clear any previous errors
@@ -41,13 +85,18 @@ export default function CreateLadderScreen({ navigation }) {
         return;
       }
 
+      // Generate unique request code
+      const requestCode = await generateUniqueRequestCode();
+
       // Create ladder document in Firestore
       await addDoc(collection(db, 'ladders'), {
         name: ladderName.trim(),
         type: gameType,
+        teamType: teamType,
         adminList: [user.uid],
         memberList: [user.uid],
         public: isPublic ? 1 : 0,
+        requestCode: requestCode,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
       });
@@ -116,7 +165,11 @@ export default function CreateLadderScreen({ navigation }) {
                   ]}
                   onPress={() => setGameType('tennis')}
                 >
-                  <Text style={styles.gameTypeEmoji}>🎾</Text>
+                  <Image 
+                    source={require('../assets/tennis.png')} 
+                    style={styles.gameTypeImage}
+                    resizeMode="contain"
+                  />
                   <Text
                     style={[
                       styles.gameTypeText,
@@ -135,7 +188,11 @@ export default function CreateLadderScreen({ navigation }) {
                   ]}
                   onPress={() => setGameType('pickleball')}
                 >
-                  <Text style={styles.gameTypeEmoji}>🏓</Text>
+                  <Image 
+                    source={require('../assets/pickleball.png')} 
+                    style={styles.gameTypeImage}
+                    resizeMode="contain"
+                  />
                   <Text
                     style={[
                       styles.gameTypeText,
@@ -143,6 +200,66 @@ export default function CreateLadderScreen({ navigation }) {
                     ]}
                   >
                     Pickleball
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Team Type</Text>
+              <View style={styles.teamTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    teamType === 'singles' && styles.teamTypeButtonActive,
+                  ]}
+                  onPress={() => setTeamType('singles')}
+                >
+                  <Text style={styles.teamTypeEmoji}>👤</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      teamType === 'singles' && styles.teamTypeTextActive,
+                    ]}
+                  >
+                    Singles
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    teamType === 'doubles' && styles.teamTypeButtonActive,
+                  ]}
+                  onPress={() => setTeamType('doubles')}
+                >
+                  <Text style={styles.teamTypeEmoji}>👥</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      teamType === 'doubles' && styles.teamTypeTextActive,
+                    ]}
+                  >
+                    Doubles
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    styles.teamTypeButtonLast,
+                    teamType === 'teams' && styles.teamTypeButtonActive,
+                  ]}
+                  onPress={() => setTeamType('teams')}
+                >
+                  <Text style={styles.teamTypeEmoji}>👤👤👤</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      teamType === 'teams' && styles.teamTypeTextActive,
+                    ]}
+                  >
+                    Teams (3+)
                   </Text>
                 </TouchableOpacity>
               </View>

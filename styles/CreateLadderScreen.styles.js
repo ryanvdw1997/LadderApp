@@ -127,12 +127,73 @@ export default StyleSheet.create({
     fontSize: 40,
     marginBottom: 8,
   },
+  gameTypeImage: {
+    width: 40,
+    height: 40,
+    marginBottom: 8,
+  },
   gameTypeText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#8B8FA8',
   },
   gameTypeTextActive: {
+    color: '#6C5CE7',
+    fontWeight: 'bold',
+  },
+  teamTypeContainer: {
+    flexDirection: 'row',
+  },
+  teamTypeButton: {
+    flex: 1,
+    backgroundColor: '#1A1F3A',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#252A45',
+    marginRight: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  teamTypeButtonLast: {
+    marginRight: 0,
+  },
+  teamTypeButtonActive: {
+    borderColor: '#6C5CE7',
+    backgroundColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  teamTypeEmoji: {
+    fontSize: 32,
+    marginBottom: 6,
+  },
+  teamTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B8FA8',
+    textAlign: 'center',
+  },
+  teamTypeTextActive: {
     color: '#6C5CE7',
     fontWeight: 'bold',
   },

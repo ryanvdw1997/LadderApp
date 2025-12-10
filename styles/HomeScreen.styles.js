@@ -104,50 +104,46 @@ export default StyleSheet.create({
     color: '#8B8FA8',
     fontWeight: '500',
   },
-  tabsContainer: {
+  buttonsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#1A1F3A',
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#252A45',
+    paddingTop: 20,
+    paddingBottom: 20,
   },
-  tab: {
+  menuButton: {
     flex: 1,
+    backgroundColor: '#1A1F3A',
+    borderRadius: 12,
     paddingVertical: 16,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+    marginRight: 6,
   },
-  tabActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#6C5CE7',
+  menuButtonLast: {
+    marginRight: 0,
   },
-  tabText: {
-    fontSize: 15,
+  menuButtonIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  menuButtonText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: '#8B8FA8',
-  },
-  tabTextActive: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#6C5CE7',
-    borderRadius: 2,
-  },
-  content: {
-    flex: 1,
-    backgroundColor: '#0A0E27',
-  },
-  tabContent: {
-    flex: 1,
-    padding: 20,
+    textAlign: 'center',
   },
   emptyStateContainer: {
     alignItems: 'center',

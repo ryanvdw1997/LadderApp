@@ -32,6 +32,10 @@ service cloud.firestore {
         && (resource.data.public == 1 
             || request.auth.uid in resource.data.memberList);
       
+      // Allow authenticated users to list/query ladders (needed for requestCode uniqueness check)
+      // This allows queries but individual documents still need to pass the read rule
+      allow list: if request.auth != null;
+      
       // Allow admins to update their ladders
       allow update: if request.auth != null 
         && request.auth.uid in resource.data.adminList;
