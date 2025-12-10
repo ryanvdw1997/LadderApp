@@ -18,5 +18,27 @@ service cloud.firestore {
     match /users/{document=**} {
       allow create: if request.auth != null;
     }
+    
+    // Ladders collection rules
+    match /ladders/{ladderId} {
+      // Allow authenticated users to create ladders
+      allow create: if request.auth != null 
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.adminList.hasAny([request.auth.uid])
+        && request.resource.data.memberList.hasAny([request.auth.uid]);
+      
+      // Allow users to read public ladders or ladders they're a member of
+      allow read: if request.auth != null 
+        && (resource.data.public == 1 
+            || request.auth.uid in resource.data.memberList);
+      
+      // Allow admins to update their ladders
+      allow update: if request.auth != null 
+        && request.auth.uid in resource.data.adminList;
+      
+      // Allow admins to delete their ladders
+      allow delete: if request.auth != null 
+        && request.auth.uid in resource.data.adminList;
+    }
   }
 }

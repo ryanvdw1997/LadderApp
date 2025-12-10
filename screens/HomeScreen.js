@@ -10,7 +10,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase.config';
 import styles from '../styles/HomeScreen.styles';
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState('My Ladders');
 
   const handleSignOut = async () => {
@@ -34,7 +34,10 @@ export default function HomeScreen() {
               <Text style={styles.emptyStateText}>
                 Create or join a ladder to start competing!
               </Text>
-              <TouchableOpacity style={styles.primaryButton}>
+              <TouchableOpacity 
+                style={styles.primaryButton}
+                onPress={() => navigation.navigate('CreateLadder')}
+              >
                 <Text style={styles.primaryButtonText}>Create Ladder</Text>
               </TouchableOpacity>
             </View>
