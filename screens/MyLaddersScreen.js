@@ -77,8 +77,7 @@ export default function MyLaddersScreen({ navigation }) {
   };
 
   const handleEditLadder = (ladder) => {
-    // Navigate to edit ladder screen (to be implemented later)
-    console.log('Edit ladder:', ladder.id);
+    navigation.navigate('EditLadder', { ladderId: ladder.id });
   };
 
   const handleDeleteLadder = (ladder) => {
