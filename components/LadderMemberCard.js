@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import styles from '../styles/LadderMemberCard.styles';
 
-export default function LadderMemberCard({ member, index, isTeam = false, isAdmin = false, email = '' }) {
+export default function LadderMemberCard({ member, index, isTeam = false, isAdmin = false, email = '', phoneNumber = '' }) {
   const rank = member.rank !== undefined && member.rank !== null 
     ? member.rank 
     : index + 1;
@@ -30,6 +30,9 @@ export default function LadderMemberCard({ member, index, isTeam = false, isAdmi
         </View>
         {email ? (
           <Text style={styles.memberEmail}>{email}</Text>
+        ) : null}
+        {isAdmin && phoneNumber ? (
+          <Text style={styles.memberPhone}>{phoneNumber}</Text>
         ) : null}
         <Text style={styles.memberPoints}>
           {points} {pointsText}

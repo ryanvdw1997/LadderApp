@@ -11,6 +11,7 @@ import CreateLadderScreen from './screens/CreateLadderScreen';
 import MyLaddersScreen from './screens/MyLaddersScreen';
 import ViewLadderScreen from './screens/ViewLadderScreen';
 import EditLadderScreen from './screens/EditLadderScreen';
+import ProfileSettingsScreen from './screens/ProfileSettingsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -42,6 +43,7 @@ export default function App() {
             <Stack.Screen name="MyLadders" component={MyLaddersScreen} />
             <Stack.Screen name="ViewLadder" component={ViewLadderScreen} />
             <Stack.Screen name="EditLadder" component={EditLadderScreen} />
+            <Stack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
           </>
         ) : (
           <>

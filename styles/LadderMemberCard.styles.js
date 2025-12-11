@@ -66,6 +66,11 @@ export default StyleSheet.create({
     color: '#6C5CE7',
     marginBottom: 4,
   },
+  memberPhone: {
+    fontSize: 14,
+    color: '#6C5CE7',
+    marginBottom: 4,
+  },
   memberPoints: {
     fontSize: 14,
     color: '#8B8FA8',
