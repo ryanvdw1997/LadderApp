@@ -14,6 +14,8 @@ import { auth, db } from '../firebase.config';
 import styles from '../styles/SignUpScreen.styles';
 
 export default function SignUpScreen({ navigation }) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -47,8 +49,18 @@ export default function SignUpScreen({ navigation }) {
   const handleSignUp = async () => {
     setError(''); // Clear any previous errors
 
-    if (!email || !password || !confirmPassword) {
+    if (!firstName || !lastName || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
+      return;
+    }
+
+    if (firstName.trim().length < 2) {
+      setError('First name must be at least 2 characters');
+      return;
+    }
+
+    if (lastName.trim().length < 2) {
+      setError('Last name must be at least 2 characters');
       return;
     }
 
@@ -77,6 +89,8 @@ export default function SignUpScreen({ navigation }) {
       await addDoc(collection(db, 'users'), {
         uid: user.uid,
         email: user.email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         createdAt: serverTimestamp(),
       });
 
@@ -106,6 +120,32 @@ export default function SignUpScreen({ navigation }) {
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
+
+            <TextInput
+              style={styles.input}
+              placeholder="First Name"
+              placeholderTextColor="#999"
+              value={firstName}
+              onChangeText={(text) => {
+                setFirstName(text);
+                setError(''); // Clear error when user types
+              }}
+              autoCapitalize="words"
+              autoComplete="given-name"
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Last Name"
+              placeholderTextColor="#999"
+              value={lastName}
+              onChangeText={(text) => {
+                setLastName(text);
+                setError(''); // Clear error when user types
+              }}
+              autoCapitalize="words"
+              autoComplete="family-name"
+            />
 
             <TextInput
               style={styles.input}
