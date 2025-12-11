@@ -6,16 +6,20 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/MyLaddersScreen.styles';
 import LadderCard from '../components/LadderCard';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 export default function MyLaddersScreen({ navigation }) {
   const [ladders, setLadders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [ladderToDelete, setLadderToDelete] = useState(null);
 
   const fetchLadders = async () => {
     try {
@@ -69,8 +73,7 @@ export default function MyLaddersScreen({ navigation }) {
   );
 
   const handleViewLadder = (ladder) => {
-    // Navigate to ladder details (to be implemented later)
-    console.log('View ladder:', ladder.id);
+    navigation.navigate('ViewLadder', { ladderId: ladder.id });
   };
 
   const handleEditLadder = (ladder) => {
@@ -79,9 +82,34 @@ export default function MyLaddersScreen({ navigation }) {
   };
 
   const handleDeleteLadder = (ladder) => {
-    // Delete ladder functionality (to be implemented later)
-    console.log('Delete ladder:', ladder.id);
-    // TODO: Add confirmation dialog and delete logic
+    setLadderToDelete(ladder);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!ladderToDelete) return;
+    
+    try {
+      await deleteDoc(doc(db, 'ladders', ladderToDelete.id));
+      // Refetch ladders to update the list
+      await fetchLadders();
+      setDeleteModalVisible(false);
+      setLadderToDelete(null);
+    } catch (error) {
+      console.error('Error deleting ladder:', error);
+      setDeleteModalVisible(false);
+      setLadderToDelete(null);
+      Alert.alert(
+        'Error',
+        'Failed to delete ladder. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteModalVisible(false);
+    setLadderToDelete(null);
   };
 
   if (loading) {
@@ -148,6 +176,13 @@ export default function MyLaddersScreen({ navigation }) {
           ))
         )}
       </ScrollView>
+      
+      <ConfirmDeleteModal
+        visible={deleteModalVisible}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        ladderName={ladderToDelete?.name || ''}
+      />
     </SafeAreaView>
   );
 }
