@@ -27,6 +27,7 @@ export default function ViewLadderScreen({ navigation }) {
   const [memberUserData, setMemberUserData] = useState(null);
   const [saving, setSaving] = useState(false);
   const [memberEmails, setMemberEmails] = useState({}); // userId -> email mapping
+  const [memberPhoneNumbers, setMemberPhoneNumbers] = useState({}); // userId -> phoneNumber mapping
 
   useEffect(() => {
     fetchLadder();
@@ -53,12 +54,13 @@ export default function ViewLadderScreen({ navigation }) {
         };
         setLadder(ladderData);
 
-        // Fetch email addresses for all members
+        // Fetch email addresses and phone numbers for all members
         const memberList = data.memberList || [];
         const emailMap = {};
+        const phoneMap = {};
         
-        // Fetch all user emails in parallel
-        const emailPromises = memberList.map(async (member) => {
+        // Fetch all user data in parallel
+        const userDataPromises = memberList.map(async (member) => {
           try {
             const q = query(
               collection(db, 'users'),
@@ -68,14 +70,16 @@ export default function ViewLadderScreen({ navigation }) {
             if (!querySnapshot.empty) {
               const userData = querySnapshot.docs[0].data();
               emailMap[member.userId] = userData.email || '';
+              phoneMap[member.userId] = userData.phoneNumber || '';
             }
           } catch (error) {
-            console.error(`Error fetching email for user ${member.userId}:`, error);
+            console.error(`Error fetching user data for user ${member.userId}:`, error);
           }
         });
 
-        await Promise.all(emailPromises);
+        await Promise.all(userDataPromises);
         setMemberEmails(emailMap);
+        setMemberPhoneNumbers(phoneMap);
       } else {
         console.error('Ladder not found');
       }
@@ -228,6 +232,7 @@ export default function ViewLadderScreen({ navigation }) {
                     isTeam={false}
                     isAdmin={isAdmin(member.userId)}
                     email={memberEmails[member.userId] || ''}
+                    phoneNumber={memberPhoneNumbers[member.userId] || ''}
                   />
                 </View>
                 {showMakeAdminOption && (
@@ -291,6 +296,7 @@ export default function ViewLadderScreen({ navigation }) {
                     isTeam={true}
                     isAdmin={isAdmin(member.userId)}
                     email={memberEmails[member.userId] || ''}
+                    phoneNumber={memberPhoneNumbers[member.userId] || ''}
                   />
                 </View>
                 {showMakeAdminOption && (

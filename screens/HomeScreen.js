@@ -243,7 +243,10 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.greeting}>Welcome back!</Text>
             <Text style={styles.userName}>Ready to climb? 🚀</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('ProfileSettings')}
+          >
             <View style={styles.profileIcon}>
               <Text style={styles.profileIconText}>👤</Text>
             </View>
