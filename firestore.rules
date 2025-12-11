@@ -6,8 +6,8 @@ service cloud.firestore {
       // Allow authenticated users to create their own user document
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
       
-      // Allow users to read their own document
-      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      // Allow authenticated users to read user documents (needed for displaying emails in ladders)
+      allow read: if request.auth != null;
       
       // Allow users to update their own document
       allow update: if request.auth != null && request.auth.uid == resource.data.uid;
