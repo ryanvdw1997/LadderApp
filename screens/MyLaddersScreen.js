@@ -5,13 +5,13 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  Image,
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/MyLaddersScreen.styles';
+import LadderCard from '../components/LadderCard';
 
 export default function MyLaddersScreen({ navigation }) {
   const [ladders, setLadders] = useState([]);
@@ -67,47 +67,6 @@ export default function MyLaddersScreen({ navigation }) {
       fetchLadders();
     }, [])
   );
-
-  const formatDate = (timestamp) => {
-    if (!timestamp) return 'Unknown date';
-    
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Created Today';
-    if (diffDays === 1) return 'Created Yesterday';
-    if (diffDays < 7) return `Created ${diffDays} days ago`;
-    
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
-    });
-  };
-
-  const getGameTypeIcon = (type) => {
-    if (type === 'tennis') {
-      return require('../assets/tennis.png');
-    } else if (type === 'pickleball') {
-      return require('../assets/pickleball.png');
-    }
-    return null;
-  };
-
-  const getTeamTypeIcon = (teamType) => {
-    switch (teamType) {
-      case 'singles':
-        return '👤';
-      case 'doubles':
-        return '👥';
-      case 'teams':
-        return '👤👤👤';
-      default:
-        return '👤';
-    }
-  };
 
   const handleViewLadder = (ladder) => {
     // Navigate to ladder details (to be implemented later)
@@ -179,69 +138,13 @@ export default function MyLaddersScreen({ navigation }) {
           </View>
         ) : (
           ladders.map((ladder) => (
-            <View key={ladder.id} style={styles.ladderCard}>
-              <TouchableOpacity
-                style={styles.ladderCardContent}
-                onPress={() => handleViewLadder(ladder)}
-              >
-                <View style={styles.ladderCardHeader}>
-                  <Text style={styles.ladderName}>{ladder.name}</Text>
-                  {ladder.isAdmin && (
-                    <View style={styles.adminBadge}>
-                      <Text style={styles.adminBadgeText}>Admin</Text>
-                    </View>
-                  )}
-                </View>
-
-                <Text style={styles.ladderDate}>
-                  {formatDate(ladder.createdAt)}
-                </Text>
-
-                <View style={styles.ladderIcons}>
-                  {ladder.type && (
-                    <View style={styles.iconContainer}>
-                      <Image
-                        source={getGameTypeIcon(ladder.type)}
-                        style={styles.gameTypeIcon}
-                        resizeMode="contain"
-                      />
-                    </View>
-                  )}
-                  {ladder.teamType && (
-                    <View style={styles.iconContainer}>
-                      <Text style={styles.teamTypeIcon}>
-                        {getTeamTypeIcon(ladder.teamType)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleViewLadder(ladder)}
-                >
-                  <Text style={styles.actionButtonIcon}>👁️</Text>
-                </TouchableOpacity>
-                {ladder.isAdmin && (
-                  <>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleEditLadder(ladder)}
-                    >
-                      <Text style={styles.actionButtonIcon}>✏️</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.deleteButton]}
-                      onPress={() => handleDeleteLadder(ladder)}
-                    >
-                      <Text style={styles.actionButtonIcon}>🗑️</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            </View>
+            <LadderCard
+              key={ladder.id}
+              ladder={ladder}
+              onView={handleViewLadder}
+              onEdit={handleEditLadder}
+              onDelete={handleDeleteLadder}
+            />
           ))
         )}
       </ScrollView>
