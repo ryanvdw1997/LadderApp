@@ -38,10 +38,32 @@ export default StyleSheet.create({
   memberInfo: {
     flex: 1,
   },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
   memberName: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    marginRight: 8,
+  },
+  adminBadge: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  adminBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  memberEmail: {
+    fontSize: 14,
+    color: '#6C5CE7',
     marginBottom: 4,
   },
   memberPoints: {

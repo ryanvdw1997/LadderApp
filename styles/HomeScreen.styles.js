@@ -206,4 +206,151 @@ export default StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalScrollContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100%',
+  },
+  modalContainer: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  confirmationMessage: {
+    fontSize: 16,
+    color: '#8B8FA8',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+  },
+  ladderName: {
+    color: '#6C5CE7',
+    fontWeight: 'bold',
+  },
+  ladderIconsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  iconContainer: {
+    backgroundColor: '#252A45',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  gameTypeIcon: {
+    width: 32,
+    height: 32,
+  },
+  teamTypeIcon: {
+    fontSize: 24,
+  },
+  inputHint: {
+    fontSize: 14,
+    color: '#8B8FA8',
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: '#252A45',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#3A3F5A',
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#E63946',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minWidth: 100,
+    alignItems: 'center',
+    marginLeft: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  modalCancelButton: {
+    backgroundColor: '#252A45',
+  },
+  modalCancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#6C5CE7',
+  },
+  modalConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
