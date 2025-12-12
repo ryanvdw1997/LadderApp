@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -9,10 +10,11 @@ import {
   Modal,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewLadderScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
+import TeamCard from '../components/TeamCard';
 
 export default function ViewLadderScreen({ navigation }) {
   const route = useRoute();
@@ -20,7 +22,7 @@ export default function ViewLadderScreen({ navigation }) {
   
   const [ladder, setLadder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('players'); // 'players' or 'matches'
+  const [activeTab, setActiveTab] = useState('players'); // 'players', 'teams', or 'matches'
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [showMakeAdminModal, setShowMakeAdminModal] = useState(false);
   const [memberToMakeAdmin, setMemberToMakeAdmin] = useState(null);
@@ -28,10 +30,32 @@ export default function ViewLadderScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [memberEmails, setMemberEmails] = useState({}); // userId -> email mapping
   const [memberPhoneNumbers, setMemberPhoneNumbers] = useState({}); // userId -> phoneNumber mapping
+  const [teams, setTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [showLeaveTeamModal, setShowLeaveTeamModal] = useState(false);
+  const [teamToLeave, setTeamToLeave] = useState(null);
+  const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false);
+  const [teamToDelete, setTeamToDelete] = useState(null);
 
   useEffect(() => {
     fetchLadder();
   }, [ladderId]);
+
+  useEffect(() => {
+    if (ladder && activeTab === 'teams') {
+      fetchTeams();
+    }
+  }, [ladder, activeTab]);
+
+  // Refetch ladder when screen comes into focus (e.g., after creating a team)
+  // The useEffect watching ladder and activeTab will automatically fetch teams if needed
+  useFocusEffect(
+    useCallback(() => {
+      if (ladderId) {
+        fetchLadder();
+      }
+    }, [ladderId])
+  );
 
   const fetchLadder = async () => {
     try {
@@ -90,8 +114,45 @@ export default function ViewLadderScreen({ navigation }) {
     }
   };
 
+  const fetchTeams = async () => {
+    if (!ladder || !ladder.teamIds || ladder.teamIds.length === 0) {
+      setTeams([]);
+      return;
+    }
+
+    try {
+      setLoadingTeams(true);
+      const teamDocs = await Promise.all(
+        ladder.teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
+      );
+
+      const teamsList = teamDocs
+        .filter(doc => doc.exists())
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          ladderId: ladderId, // Ensure ladderId is included
+        }));
+
+      // Sort teams by rank (ascending, 1 is best) or by points (descending) if no rank
+      teamsList.sort((a, b) => {
+        if (a.rank !== undefined && b.rank !== undefined) {
+          return (a.rank || 999) - (b.rank || 999);
+        }
+        return (b.points || 0) - (a.points || 0);
+      });
+
+      setTeams(teamsList);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+      setTeams([]);
+    } finally {
+      setLoadingTeams(false);
+    }
+  };
+
   const isSingles = ladder?.teamType === 'singles';
-  const sectionTitle = isSingles ? 'Players' : 'Teams';
+  const showTeamsTab = !isSingles; // Show teams tab only for doubles/teams ladders
 
   if (loading) {
     return (
@@ -205,6 +266,116 @@ export default function ViewLadderScreen({ navigation }) {
     setExpandedPlayer(null);
   };
 
+  const handleLeaveTeam = (team) => {
+    setTeamToLeave(team);
+    setShowLeaveTeamModal(true);
+  };
+
+  const confirmLeaveTeam = async () => {
+    if (!teamToLeave) return;
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setSaving(true);
+
+      // Get current team data
+      const teamDoc = await getDoc(doc(db, 'ladderteams', teamToLeave.id));
+      if (!teamDoc.exists()) {
+        alert('Team not found');
+        setShowLeaveTeamModal(false);
+        setTeamToLeave(null);
+        setSaving(false);
+        return;
+      }
+
+      const teamData = teamDoc.data();
+      const currentMembers = teamData.members || [];
+      const currentMemberIds = teamData.memberIds || [];
+
+      // Remove user from members and memberIds
+      const newMembers = currentMembers.filter(m => m.userId !== user.uid);
+      const newMemberIds = currentMemberIds.filter(id => id !== user.uid);
+
+      await updateDoc(doc(db, 'ladderteams', teamToLeave.id), {
+        members: newMembers,
+        memberIds: newMemberIds,
+      });
+
+      // Close modal and refresh teams list
+      setShowLeaveTeamModal(false);
+      setTeamToLeave(null);
+      await fetchTeams();
+      await fetchLadder(); // Refresh ladder to update teamIds if needed
+    } catch (error) {
+      console.error('Error leaving team:', error);
+      alert('Failed to leave team. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelLeaveTeam = () => {
+    setShowLeaveTeamModal(false);
+    setTeamToLeave(null);
+  };
+
+  const handleDeleteTeam = (team) => {
+    setTeamToDelete(team);
+    setShowDeleteTeamModal(true);
+  };
+
+  const confirmDeleteTeam = async () => {
+    if (!teamToDelete) return;
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setSaving(true);
+
+      // Delete the team document
+      await deleteDoc(doc(db, 'ladderteams', teamToDelete.id));
+
+      // Remove team ID from ladder's teamIds array
+      if (teamToDelete.ladderId || ladderId) {
+        try {
+          const ladderDocRef = doc(db, 'ladders', teamToDelete.ladderId || ladderId);
+          const ladderDoc = await getDoc(ladderDocRef);
+          if (ladderDoc.exists()) {
+            const ladderData = ladderDoc.data();
+            const currentTeamIds = ladderData.teamIds || [];
+            const newTeamIds = currentTeamIds.filter(id => id !== teamToDelete.id);
+
+            await updateDoc(ladderDocRef, {
+              teamIds: newTeamIds,
+            });
+          }
+        } catch (error) {
+          console.error('Error updating ladder teamIds:', error);
+          // Continue even if this fails - team is already deleted
+        }
+      }
+
+      // Close modal and refresh teams list
+      setShowDeleteTeamModal(false);
+      setTeamToDelete(null);
+      await fetchLadder(); // Refresh ladder to get updated teamIds
+      await fetchTeams(); // Refresh teams list
+    } catch (error) {
+      console.error('Error deleting team:', error);
+      alert('Failed to delete team. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelDeleteTeam = () => {
+    setShowDeleteTeamModal(false);
+    setTeamToDelete(null);
+  };
+
   const renderPlayersList = () => {
     if (sortedMembers.length === 0) {
       return (
@@ -270,60 +441,59 @@ export default function ViewLadderScreen({ navigation }) {
   };
 
   const renderTeamsList = () => {
-    if (sortedMembers.length === 0) {
+    if (loadingTeams) {
       return (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No teams yet</Text>
+          <ActivityIndicator size="large" color="#6C5CE7" />
         </View>
       );
     }
 
-    const currentUserIsAdmin = ladder?.isAdmin;
+    if (teams.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No teams yet</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Create a team to get started!
+          </Text>
+        </View>
+      );
+    }
+
+    const user = auth.currentUser;
 
     return (
       <View style={styles.listContainer}>
-        {sortedMembers.map((member, index) => {
-          const memberIsAdmin = isAdmin(member.userId);
-          const showMakeAdminOption = currentUserIsAdmin && !memberIsAdmin;
+        {teams.map((team, index) => {
+          const isCreator = user && team.createdBy === user.uid;
+          const isMember = user && team.memberIds && team.memberIds.includes(user.uid);
 
           return (
-            <View key={member.userId || index}>
-              <View style={styles.playerCardWrapper}>
-                <View style={{ flex: 1 }}>
-                  <LadderMemberCard
-                    member={member}
-                    index={index}
-                    isTeam={true}
-                    isAdmin={isAdmin(member.userId)}
-                    email={memberEmails[member.userId] || ''}
-                    phoneNumber={memberPhoneNumbers[member.userId] || ''}
-                  />
-                </View>
-                {showMakeAdminOption && (
-                  <TouchableOpacity
-                    style={styles.expandButton}
-                    onPress={() =>
-                      setExpandedPlayer(
-                        expandedPlayer === member.userId ? null : member.userId
-                      )
-                    }
-                  >
-                    <Text style={styles.dropdownIcon}>
-                      {expandedPlayer === member.userId ? '▲' : '▼'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+            <View key={team.id || index} style={styles.teamCardWrapper}>
+              <View style={{ flex: 1 }}>
+                <TeamCard team={team} index={index} />
               </View>
-
-              {expandedPlayer === member.userId && showMakeAdminOption && (
-                <View style={styles.dropdownContent}>
-                  <TouchableOpacity
-                    style={styles.actionOption}
-                    onPress={() => handleMakeAdminClick(member)}
-                    disabled={saving}
-                  >
-                    <Text style={styles.actionOptionText}>Make Admin</Text>
-                  </TouchableOpacity>
+              {isMember && (
+                <View style={styles.teamActionButtons}>
+                  {isCreator ? (
+                    <TouchableOpacity
+                      style={styles.deleteTeamButton}
+                      onPress={() => handleDeleteTeam(team)}
+                      disabled={saving}
+                    >
+                      <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.leaveTeamButton}
+                      onPress={() => handleLeaveTeam(team)}
+                      disabled={saving}
+                      accessibilityLabel="Leave Team"
+                      accessibilityHint="Tap to leave this team"
+                    >
+                      <Text style={styles.leaveTeamButtonIcon}>👋</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -355,7 +525,17 @@ export default function ViewLadderScreen({ navigation }) {
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.title}>{ladder.name}</Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>{ladder.name}</Text>
+          {showTeamsTab && (
+            <TouchableOpacity
+              style={styles.createTeamButton}
+              onPress={() => navigation.navigate('CreateTeam', { ladderId: ladderId })}
+            >
+              <Text style={styles.createTeamButtonText}>Create Team</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.tabsContainer}>
@@ -364,9 +544,19 @@ export default function ViewLadderScreen({ navigation }) {
           onPress={() => setActiveTab('players')}
         >
           <Text style={[styles.tabText, activeTab === 'players' && styles.activeTabText]}>
-            {sectionTitle}
+            Players
           </Text>
         </TouchableOpacity>
+        {showTeamsTab && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'teams' && styles.activeTab]}
+            onPress={() => setActiveTab('teams')}
+          >
+            <Text style={[styles.tabText, activeTab === 'teams' && styles.activeTabText]}>
+              Teams
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.tab, activeTab === 'matches' && styles.activeTab]}
           onPress={() => setActiveTab('matches')}
@@ -382,11 +572,9 @@ export default function ViewLadderScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'players' ? (
-          isSingles ? renderPlayersList() : renderTeamsList()
-        ) : (
-          renderMatchesList()
-        )}
+        {activeTab === 'players' && renderPlayersList()}
+        {activeTab === 'teams' && renderTeamsList()}
+        {activeTab === 'matches' && renderMatchesList()}
       </ScrollView>
 
       {/* Make Admin Confirmation Modal */}
@@ -425,6 +613,80 @@ export default function ViewLadderScreen({ navigation }) {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Leave Team Confirmation Modal */}
+      <Modal
+        visible={showLeaveTeamModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLeaveTeam}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Leave Team</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to leave <Text style={styles.modalBoldText}>{teamToLeave?.name}</Text>?
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelLeaveTeam}
+                disabled={saving}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={confirmLeaveTeam}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Team Confirmation Modal */}
+      <Modal
+        visible={showDeleteTeamModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDeleteTeam}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Delete Team</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete <Text style={styles.modalBoldText}>{teamToDelete?.name}</Text>? This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelDeleteTeam}
+                disabled={saving}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalDeleteButton]}
+                onPress={confirmDeleteTeam}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalDeleteButtonText}>Delete</Text>
                 )}
               </TouchableOpacity>
             </View>

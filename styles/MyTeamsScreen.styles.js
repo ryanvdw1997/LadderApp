@@ -10,18 +10,6 @@ export default StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
   header: {
     backgroundColor: '#1A1F3A',
     paddingTop: Platform.OS === 'ios' ? 10 : 20,
@@ -55,68 +43,15 @@ export default StyleSheet.create({
     color: '#6C5CE7',
     fontWeight: '600',
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: 4,
-    flex: 1,
   },
-  createTeamButton: {
-    backgroundColor: '#6C5CE7',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginBottom: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#6C5CE7',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  createTeamButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#1A1F3A',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#252A45',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomColor: '#6C5CE7',
-  },
-  tabText: {
+  subtitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#8B8FA8',
-  },
-  activeTabText: {
-    color: '#6C5CE7',
   },
   content: {
     flex: 1,
@@ -125,16 +60,105 @@ export default StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  listContainer: {
-  },
-  teamCardWrapper: {
-    flexDirection: 'row',
+  emptyStateContainer: {
     alignItems: 'center',
-    marginBottom: 12,
-    position: 'relative',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
   },
-  teamActionButtons: {
-    marginLeft: 12,
+  emptyStateEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#8B8FA8',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  teamCard: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  teamCardHeader: {
+    marginBottom: 12,
+  },
+  teamCardInfo: {
+    marginBottom: 8,
+  },
+  teamName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  ladderName: {
+    fontSize: 16,
+    color: '#6C5CE7',
+    marginBottom: 4,
+  },
+  createdDate: {
+    fontSize: 14,
+    color: '#8B8FA8',
+  },
+  membersDropdown: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#252A45',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  membersDropdownText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: '#8B8FA8',
+  },
+  membersList: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#252A45',
+  },
+  memberItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  memberName: {
+    fontSize: 15,
+    color: '#8B8FA8',
+  },
+  actionButtonContainer: {
+    marginTop: 12,
+    alignItems: 'flex-end',
   },
   leaveTeamButton: {
     width: 36,
@@ -161,56 +185,6 @@ export default StyleSheet.create({
   },
   deleteTeamButtonIcon: {
     fontSize: 18,
-  },
-  playerCardWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    position: 'relative',
-  },
-  expandButton: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    zIndex: 1,
-  },
-  dropdownIcon: {
-    fontSize: 12,
-    color: '#8B8FA8',
-  },
-  dropdownContent: {
-    backgroundColor: '#1A1F3A',
-    borderRadius: 12,
-    marginTop: -12,
-    marginBottom: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#252A45',
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  actionOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  actionOptionText: {
-    fontSize: 16,
-    color: '#6C5CE7',
-    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
@@ -303,24 +277,5 @@ export default StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 20,
-  },
-  emptyStateText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  emptyStateSubtext: {
-    fontSize: 16,
-    color: '#8B8FA8',
-    textAlign: 'center',
-    lineHeight: 24,
   },
 });

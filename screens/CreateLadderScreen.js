@@ -135,6 +135,7 @@ export default function CreateLadderScreen({ navigation }) {
       // Create ladder document in Firestore
       // memberList: array of objects with full member info
       // memberIds: array of UIDs for Firestore security rules (denormalized)
+      // teamIds: array of team document IDs for teams in this ladder
       await addDoc(collection(db, 'ladders'), {
         name: ladderName.trim(),
         type: gameType,
@@ -142,6 +143,7 @@ export default function CreateLadderScreen({ navigation }) {
         adminList: [user.uid],
         memberList: [memberObject],
         memberIds: [user.uid], // Denormalized array for security rules
+        teamIds: [], // Array of team document IDs
         public: isPublic ? 1 : 0,
         joinCode: joinCode,
         createdAt: serverTimestamp(),

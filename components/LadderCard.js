@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import styles from '../styles/LadderCard.styles';
 
-export default function LadderCard({ ladder, onView, onEdit, onDelete }) {
+export default function LadderCard({ ladder, onView, onEdit, onDelete, onCreateTeam }) {
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown date';
     
@@ -95,6 +95,14 @@ export default function LadderCard({ ladder, onView, onEdit, onDelete }) {
         >
           <Text style={styles.actionButtonIcon}>👁️</Text>
         </TouchableOpacity>
+        {(ladder.teamType === 'doubles' || ladder.teamType === 'teams') && onCreateTeam && (
+          <TouchableOpacity
+            style={styles.createTeamButton}
+            onPress={() => onCreateTeam(ladder)}
+          >
+            <Text style={styles.createTeamButtonText}>Create Team</Text>
+          </TouchableOpacity>
+        )}
         {ladder.isAdmin && (
           <>
             <TouchableOpacity

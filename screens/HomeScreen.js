@@ -226,12 +226,9 @@ export default function HomeScreen({ navigation }) {
       icon: '📨'
     },
     { 
-      label: 'Requests', 
-      onPress: () => {
-        // Navigate to requests screen (to be implemented)
-        console.log('Navigate to requests');
-      },
-      icon: '🔔'
+      label: 'My Teams', 
+      onPress: () => navigation.navigate('MyTeams'),
+      icon: '👥'
     },
   ];
 
