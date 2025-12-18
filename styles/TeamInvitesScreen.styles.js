@@ -83,7 +83,7 @@ export default StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  teamCard: {
+  inviteCard: {
     backgroundColor: '#1A1F3A',
     borderRadius: 12,
     padding: 16,
@@ -102,105 +102,65 @@ export default StyleSheet.create({
       },
     }),
   },
-  teamCardHeader: {
-    marginBottom: 12,
-  },
-  teamCardInfo: {
-    marginBottom: 8,
-  },
-  teamName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 6,
-  },
-  ladderName: {
-    fontSize: 16,
-    color: '#6C5CE7',
-    marginBottom: 4,
-  },
-  createdDate: {
-    fontSize: 14,
-    color: '#8B8FA8',
-  },
-  membersDropdown: {
+  inviteHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#252A45',
-    borderRadius: 8,
-    marginTop: 8,
+    marginBottom: 12,
   },
-  membersDropdownText: {
-    fontSize: 16,
-    fontWeight: '600',
+  inviteTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#FFFFFF',
   },
-  dropdownIcon: {
+  inviteDate: {
     fontSize: 12,
     color: '#8B8FA8',
   },
-  membersList: {
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#252A45',
-  },
-  memberItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  memberName: {
-    fontSize: 15,
+  inviteMessage: {
+    fontSize: 16,
     color: '#8B8FA8',
+    marginBottom: 8,
+    lineHeight: 24,
   },
-  actionButtonContainer: {
-    marginTop: 12,
-    alignItems: 'flex-end',
+  inviteBoldText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  inviteLadder: {
+    fontSize: 14,
+    color: '#6C5CE7',
+    marginBottom: 16,
+  },
+  inviteActions: {
     flexDirection: 'row',
-    gap: 8,
     justifyContent: 'flex-end',
+    gap: 12,
   },
-  addPlayerButton: {
-    width: 36,
-    height: 36,
+  inviteButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#6C5CE7',
-    justifyContent: 'center',
+    minWidth: 100,
     alignItems: 'center',
   },
-  addPlayerButtonIcon: {
-    fontSize: 18,
-  },
-  leaveTeamButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
+  declineButton: {
+    backgroundColor: '#252A45',
     borderWidth: 1,
-    borderColor: '#8B8FA8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: '#3A3F5A',
   },
-  leaveTeamButtonIcon: {
-    fontSize: 18,
+  declineButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  deleteTeamButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#E63946',
-    justifyContent: 'center',
-    alignItems: 'center',
+  acceptButton: {
+    backgroundColor: '#6C5CE7',
   },
-  deleteTeamButtonIcon: {
-    fontSize: 18,
+  acceptButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   modalOverlay: {
     flex: 1,
@@ -282,14 +242,6 @@ export default StyleSheet.create({
     backgroundColor: '#6C5CE7',
   },
   modalConfirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modalDeleteButton: {
-    backgroundColor: '#E63946',
-  },
-  modalDeleteButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',

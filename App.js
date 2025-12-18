@@ -14,6 +14,9 @@ import EditLadderScreen from './screens/EditLadderScreen';
 import ProfileSettingsScreen from './screens/ProfileSettingsScreen';
 import CreateTeamScreen from './screens/CreateTeamScreen';
 import MyTeamsScreen from './screens/MyTeamsScreen';
+import AddPlayersToTeamScreen from './screens/AddPlayersToTeamScreen';
+import TeamInvitesScreen from './screens/TeamInvitesScreen';
+import CreateMatchupScreen from './screens/CreateMatchupScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -48,6 +51,9 @@ export default function App() {
             <Stack.Screen name="ProfileSettings" component={ProfileSettingsScreen} />
             <Stack.Screen name="CreateTeam" component={CreateTeamScreen} />
             <Stack.Screen name="MyTeams" component={MyTeamsScreen} />
+            <Stack.Screen name="AddPlayersToTeam" component={AddPlayersToTeamScreen} />
+            <Stack.Screen name="TeamInvites" component={TeamInvitesScreen} />
+            <Stack.Screen name="CreateMatchup" component={CreateMatchupScreen} />
           </>
         ) : (
           <>

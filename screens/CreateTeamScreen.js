@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, collection, addDoc, updateDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, updateDoc, query, where, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/CreateTeamScreen.styles';
 
@@ -142,35 +142,45 @@ export default function CreateTeamScreen({ navigation }) {
       : [user.uid, ...selectedPlayers];
 
     // Validate player count
-    if (ladder?.teamType === 'doubles' && finalSelectedPlayers.length !== 2) {
-      setError('Doubles teams must have exactly 2 players');
-      return;
-    }
-
-    if (finalSelectedPlayers.length < 2) {
-      setError('Teams must have at least 2 players');
+    // For doubles, we need at least 1 other player (creator + 1 invite)
+    if (ladder?.teamType === 'doubles' && finalSelectedPlayers.length < 2) {
+      setError('Doubles teams require at least 2 players. Select 1 player to invite.');
       return;
     }
 
     try {
       setSaving(true);
 
-      // Get member objects for selected players
-      const teamMembers = finalSelectedPlayers.map(userId => {
-        const member = availableMembers.find(m => m.userId === userId);
-        return {
-          userId: userId,
-          nickname: member?.nickname || 'Unknown',
-          points: member?.points || 0,
-        };
-      });
+      // Check if user is already on a team in this ladder
+      const existingTeamsQuery = query(
+        collection(db, 'ladderteams'),
+        where('ladderId', '==', ladderId),
+        where('memberIds', 'array-contains', user.uid)
+      );
+      const existingTeamsSnapshot = await getDocs(existingTeamsQuery);
+      
+      if (!existingTeamsSnapshot.empty) {
+        setError('You are already on a team in this ladder. Please leave your current team before creating a new one.');
+        setSaving(false);
+        return;
+      }
 
-      // Create team document in ladderteams collection
+      // Separate creator from other players
+      const otherPlayers = finalSelectedPlayers.filter(id => id !== user.uid);
+      const creatorMember = availableMembers.find(m => m.userId === user.uid);
+
+      // Create team document with only the creator initially
+      const teamMembers = [{
+        userId: user.uid,
+        nickname: creatorMember?.nickname || 'Unknown',
+        points: creatorMember?.points || 0,
+      }];
+
       const teamDocRef = await addDoc(collection(db, 'ladderteams'), {
         ladderId: ladderId,
         name: teamName.trim(),
         members: teamMembers,
-        memberIds: finalSelectedPlayers, // Denormalized for security rules
+        memberIds: [user.uid], // Only creator initially
         points: 0,
         rank: 0,
         createdAt: serverTimestamp(),
@@ -184,6 +194,25 @@ export default function CreateTeamScreen({ navigation }) {
       await updateDoc(doc(db, 'ladders', ladderId), {
         teamIds: newTeamIds,
       });
+
+      // Send invites to other selected players
+      if (otherPlayers.length > 0) {
+        const batch = writeBatch(db);
+        
+        otherPlayers.forEach(recipientId => {
+          const inviteRef = doc(collection(db, 'teaminvites'));
+          batch.set(inviteRef, {
+            senderId: user.uid,
+            recipientId: recipientId,
+            teamId: teamDocRef.id,
+            ladderId: ladderId,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+          });
+        });
+
+        await batch.commit();
+      }
 
       // Navigate back to My Ladders
       navigation.goBack();
@@ -284,11 +313,11 @@ export default function CreateTeamScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Select Players {isDoubles ? '(2 required)' : '(2+ required)'}
+              Select Players to Invite {isDoubles ? '(1 more required)' : '(1+ optional)'}
             </Text>
             <Text style={styles.hint}>
-              {selectedPlayers.length} / {isDoubles ? '2' : 'unlimited'} selected
-              {user && selectedPlayers.includes(user.uid) && ' (including you)'}
+              {selectedPlayers.length} / {isDoubles ? '1' : 'unlimited'} selected
+              {user && selectedPlayers.includes(user.uid) && ' (you are automatically included)'}
             </Text>
 
             <View style={styles.playerList}>

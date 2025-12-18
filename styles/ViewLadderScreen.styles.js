@@ -67,6 +67,11 @@ export default StyleSheet.create({
     marginBottom: 4,
     flex: 1,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   createTeamButton: {
     backgroundColor: '#6C5CE7',
     borderRadius: 12,
@@ -86,6 +91,29 @@ export default StyleSheet.create({
     }),
   },
   createTeamButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  createMatchupButton: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  createMatchupButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
@@ -135,6 +163,21 @@ export default StyleSheet.create({
   },
   teamActionButtons: {
     marginLeft: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addPlayerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#6C5CE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addPlayerButtonIcon: {
+    fontSize: 18,
   },
   leaveTeamButton: {
     width: 36,
@@ -322,5 +365,63 @@ export default StyleSheet.create({
     color: '#8B8FA8',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  matchupCard: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  matchupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  matchupNames: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#252A45',
+  },
+  statusBadgePending: {
+    backgroundColor: '#FFA726',
+  },
+  statusBadgeCompleted: {
+    backgroundColor: '#66BB6A',
+  },
+  statusBadgeExpired: {
+    backgroundColor: '#8B8FA8',
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  matchupDetails: {
+    gap: 4,
+  },
+  matchupDetailText: {
+    fontSize: 14,
+    color: '#8B8FA8',
   },
 });

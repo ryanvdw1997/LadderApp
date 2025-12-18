@@ -295,13 +295,24 @@ export default function MyTeamsScreen({ navigation }) {
 
               <View style={styles.actionButtonContainer}>
                 {auth.currentUser && team.createdBy === auth.currentUser.uid ? (
-                  <TouchableOpacity
-                    style={styles.deleteTeamButton}
-                    onPress={() => handleDeleteTeam(team)}
-                    disabled={saving}
-                  >
-                    <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      style={styles.addPlayerButton}
+                      onPress={() => navigation.navigate('AddPlayersToTeam', { teamId: team.id, ladderId: team.ladderId })}
+                      disabled={saving}
+                      accessibilityLabel="Add Players"
+                      accessibilityHint="Tap to add players to this team"
+                    >
+                      <Text style={styles.addPlayerButtonIcon}>➕</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteTeamButton}
+                      onPress={() => handleDeleteTeam(team)}
+                      disabled={saving}
+                    >
+                      <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
                   <TouchableOpacity
                     style={styles.leaveTeamButton}

@@ -26,6 +26,7 @@ export default function EditLadderScreen({ navigation }) {
   const [gameType, setGameType] = useState('tennis');
   const [teamType, setTeamType] = useState('singles');
   const [isPublic, setIsPublic] = useState(true);
+  const [matchExpirationDays, setMatchExpirationDays] = useState(7);
   const [activeTab, setActiveTab] = useState('players');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
@@ -57,6 +58,7 @@ export default function EditLadderScreen({ navigation }) {
         setGameType(data.type || 'tennis');
         setTeamType(data.teamType || 'singles');
         setIsPublic(data.public === 1);
+        setMatchExpirationDays(data.matchExpirationDays || 7);
       } else {
         console.error('Ladder not found');
       }
@@ -82,6 +84,7 @@ export default function EditLadderScreen({ navigation }) {
         type: gameType,
         teamType: teamType,
         public: isPublic ? 1 : 0,
+        matchExpirationDays: matchExpirationDays,
       };
 
       await updateDoc(doc(db, 'ladders', ladderId), updates);
@@ -93,6 +96,7 @@ export default function EditLadderScreen({ navigation }) {
         type: gameType,
         teamType: teamType,
         public: isPublic ? 1 : 0,
+        matchExpirationDays: matchExpirationDays,
       });
 
       // Show success message
@@ -452,6 +456,36 @@ export default function EditLadderScreen({ navigation }) {
                 👤👤👤 Teams
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Match Expiration Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Match Expiration (Days)</Text>
+          <Text style={styles.sectionDescription}>
+            Matches expire after this many days (1-14)
+          </Text>
+          <View style={styles.expirationDaysContainer}>
+            {[1, 3, 5, 7, 10, 14].map((days) => (
+              <TouchableOpacity
+                key={days}
+                style={[
+                  styles.expirationDayButton,
+                  matchExpirationDays === days && styles.expirationDayButtonActive,
+                ]}
+                onPress={() => setMatchExpirationDays(days)}
+                disabled={saving}
+              >
+                <Text
+                  style={[
+                    styles.expirationDayText,
+                    matchExpirationDays === days && styles.expirationDayTextActive,
+                  ]}
+                >
+                  {days}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 

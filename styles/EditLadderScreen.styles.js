@@ -103,6 +103,40 @@ export default StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 12,
   },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#8B8FA8',
+    marginBottom: 12,
+  },
+  expirationDaysContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 10,
+  },
+  expirationDayButton: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 2,
+    borderColor: '#252A45',
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  expirationDayButtonActive: {
+    borderColor: '#6C5CE7',
+    backgroundColor: '#252A45',
+  },
+  expirationDayText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8B8FA8',
+  },
+  expirationDayTextActive: {
+    color: '#6C5CE7',
+    fontWeight: 'bold',
+  },
   input: {
     backgroundColor: '#1A1F3A',
     borderRadius: 12,

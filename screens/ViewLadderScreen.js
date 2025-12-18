@@ -36,6 +36,8 @@ export default function ViewLadderScreen({ navigation }) {
   const [teamToLeave, setTeamToLeave] = useState(null);
   const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
+  const [matchups, setMatchups] = useState([]);
+  const [loadingMatchups, setLoadingMatchups] = useState(false);
 
   useEffect(() => {
     fetchLadder();
@@ -45,10 +47,13 @@ export default function ViewLadderScreen({ navigation }) {
     if (ladder && activeTab === 'teams') {
       fetchTeams();
     }
+    if (ladder && activeTab === 'matches') {
+      fetchMatchups();
+    }
   }, [ladder, activeTab]);
 
-  // Refetch ladder when screen comes into focus (e.g., after creating a team)
-  // The useEffect watching ladder and activeTab will automatically fetch teams if needed
+  // Refetch ladder when screen comes into focus (e.g., after creating a team or matchup)
+  // The useEffect watching ladder and activeTab will automatically fetch teams/matchups if needed
   useFocusEffect(
     useCallback(() => {
       if (ladderId) {
@@ -148,6 +153,41 @@ export default function ViewLadderScreen({ navigation }) {
       setTeams([]);
     } finally {
       setLoadingTeams(false);
+    }
+  };
+
+  const fetchMatchups = async () => {
+    if (!ladder || !ladderId) {
+      setMatchups([]);
+      return;
+    }
+
+    try {
+      setLoadingMatchups(true);
+      const matchupsQuery = query(
+        collection(db, 'matchups'),
+        where('ladderId', '==', ladderId)
+      );
+      const matchupsSnapshot = await getDocs(matchupsQuery);
+      
+      const matchupsList = matchupsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Sort by createdAt (newest first)
+      matchupsList.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+        return bDate - aDate;
+      });
+
+      setMatchups(matchupsList);
+    } catch (error) {
+      console.error('Error fetching matchups:', error);
+      setMatchups([]);
+    } finally {
+      setLoadingMatchups(false);
     }
   };
 
@@ -476,13 +516,24 @@ export default function ViewLadderScreen({ navigation }) {
               {isMember && (
                 <View style={styles.teamActionButtons}>
                   {isCreator ? (
-                    <TouchableOpacity
-                      style={styles.deleteTeamButton}
-                      onPress={() => handleDeleteTeam(team)}
-                      disabled={saving}
-                    >
-                      <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={styles.addPlayerButton}
+                        onPress={() => navigation.navigate('AddPlayersToTeam', { teamId: team.id, ladderId: team.ladderId || ladderId })}
+                        disabled={saving}
+                        accessibilityLabel="Add Players"
+                        accessibilityHint="Tap to add players to this team"
+                      >
+                        <Text style={styles.addPlayerButtonIcon}>➕</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.deleteTeamButton}
+                        onPress={() => handleDeleteTeam(team)}
+                        disabled={saving}
+                      >
+                        <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
+                      </TouchableOpacity>
+                    </>
                   ) : (
                     <TouchableOpacity
                       style={styles.leaveTeamButton}
@@ -504,12 +555,78 @@ export default function ViewLadderScreen({ navigation }) {
   };
 
   const renderMatchesList = () => {
+    if (loadingMatchups) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color="#6C5CE7" />
+        </View>
+      );
+    }
+
+    if (matchups.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No matchups yet</Text>
+          {ladder.isAdmin && (
+            <Text style={styles.emptyStateSubtext}>
+              Create a matchup to get started
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    const isSingles = ladder?.teamType === 'singles';
+
     return (
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyStateText}>Matches coming soon!</Text>
-        <Text style={styles.emptyStateSubtext}>
-          This feature will allow you to view and manage match results.
-        </Text>
+      <View style={styles.listContainer}>
+        {matchups.map((matchup) => {
+          const createdAt = matchup.createdAt?.toDate ? matchup.createdAt.toDate() : null;
+          const expiresAt = matchup.expiresAt?.toDate ? matchup.expiresAt.toDate() : null;
+          const now = new Date();
+          const isExpired = expiresAt && expiresAt < now;
+          const status = matchup.status || 'pending';
+
+          // Format dates
+          const createdDateStr = createdAt 
+            ? createdAt.toLocaleDateString() 
+            : 'Unknown date';
+          const expiresDateStr = expiresAt 
+            ? expiresAt.toLocaleDateString() 
+            : 'Unknown';
+
+          // Get names
+          const name1 = isSingles ? matchup.player1Name : matchup.team1Name;
+          const name2 = isSingles ? matchup.player2Name : matchup.team2Name;
+
+          return (
+            <View key={matchup.id} style={styles.matchupCard}>
+              <View style={styles.matchupHeader}>
+                <Text style={styles.matchupNames}>
+                  {name1 || 'Unknown'} vs {name2 || 'Unknown'}
+                </Text>
+                <View style={[
+                  styles.statusBadge,
+                  status === 'completed' && styles.statusBadgeCompleted,
+                  status === 'pending' && !isExpired && styles.statusBadgePending,
+                  isExpired && styles.statusBadgeExpired,
+                ]}>
+                  <Text style={styles.statusBadgeText}>
+                    {isExpired ? 'Expired' : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.matchupDetails}>
+                <Text style={styles.matchupDetailText}>
+                  Created: {createdDateStr}
+                </Text>
+                <Text style={styles.matchupDetailText}>
+                  Expires: {expiresDateStr}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
       </View>
     );
   };
@@ -527,14 +644,24 @@ export default function ViewLadderScreen({ navigation }) {
         </View>
         <View style={styles.headerTitleRow}>
           <Text style={styles.title}>{ladder.name}</Text>
-          {showTeamsTab && (
-            <TouchableOpacity
-              style={styles.createTeamButton}
-              onPress={() => navigation.navigate('CreateTeam', { ladderId: ladderId })}
-            >
-              <Text style={styles.createTeamButtonText}>Create Team</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerButtons}>
+            {showTeamsTab && (
+              <TouchableOpacity
+                style={styles.createTeamButton}
+                onPress={() => navigation.navigate('CreateTeam', { ladderId: ladderId })}
+              >
+                <Text style={styles.createTeamButtonText}>Create Team</Text>
+              </TouchableOpacity>
+            )}
+            {ladder.isAdmin && activeTab === 'matches' && (
+              <TouchableOpacity
+                style={styles.createMatchupButton}
+                onPress={() => navigation.navigate('CreateMatchup', { ladderId: ladderId })}
+              >
+                <Text style={styles.createMatchupButtonText}>Create Matchup</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
