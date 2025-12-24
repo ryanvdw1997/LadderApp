@@ -218,20 +218,14 @@ export default function HomeScreen({ navigation }) {
       icon: '🪜'
     },
     { 
-      label: 'Ladder Invites', 
-      onPress: () => {
-        // Navigate to invites screen (to be implemented)
-        console.log('Navigate to invites');
-      },
+      label: 'Team Invites', 
+      onPress: () => navigation.navigate('TeamInvites'),
       icon: '📨'
     },
     { 
-      label: 'Requests', 
-      onPress: () => {
-        // Navigate to requests screen (to be implemented)
-        console.log('Navigate to requests');
-      },
-      icon: '🔔'
+      label: 'My Teams', 
+      onPress: () => navigation.navigate('MyTeams'),
+      icon: '👥'
     },
   ];
 

@@ -85,6 +85,10 @@ export default function MyLaddersScreen({ navigation }) {
     setDeleteModalVisible(true);
   };
 
+  const handleCreateTeam = (ladder) => {
+    navigation.navigate('CreateTeam', { ladderId: ladder.id });
+  };
+
   const confirmDelete = async () => {
     if (!ladderToDelete) return;
     
@@ -171,6 +175,7 @@ export default function MyLaddersScreen({ navigation }) {
               onView={handleViewLadder}
               onEdit={handleEditLadder}
               onDelete={handleDeleteLadder}
+              onCreateTeam={handleCreateTeam}
             />
           ))
         )}

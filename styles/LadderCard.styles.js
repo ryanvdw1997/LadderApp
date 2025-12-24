@@ -114,4 +114,27 @@ export default StyleSheet.create({
   actionButtonIcon: {
     fontSize: 18,
   },
+  createTeamButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#6C5CE7',
+    marginLeft: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  createTeamButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
