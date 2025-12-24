@@ -85,12 +85,6 @@ export default function MyLaddersScreen({ navigation }) {
     setDeleteModalVisible(true);
   };
 
-  const handleCreateTeam = (ladder) => {
-    // Note: Teams are now created within sessions, so this should navigate to sessions first
-    // For now, navigate to ViewLadder where user can create teams in a session
-    navigation.navigate('ViewLadder', { ladderId: ladder.id });
-  };
-
   const confirmDelete = async () => {
     if (!ladderToDelete) return;
     
@@ -177,7 +171,6 @@ export default function MyLaddersScreen({ navigation }) {
               onView={handleViewLadder}
               onEdit={handleEditLadder}
               onDelete={handleDeleteLadder}
-              onCreateTeam={handleCreateTeam}
             />
           ))
         )}
