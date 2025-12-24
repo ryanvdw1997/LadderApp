@@ -14,7 +14,6 @@ import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } 
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewLadderScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
-import TeamCard from '../components/TeamCard';
 
 export default function ViewLadderScreen({ navigation }) {
   const route = useRoute();
@@ -36,10 +35,6 @@ export default function ViewLadderScreen({ navigation }) {
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [expandedSession, setExpandedSession] = useState(null);
-  const [sessionTeams, setSessionTeams] = useState({}); // sessionId -> teams array
-  const [sessionMatchups, setSessionMatchups] = useState({}); // sessionId -> matchups array
-  const [loadingSessionData, setLoadingSessionData] = useState({}); // sessionId -> loading state
 
   useEffect(() => {
     fetchLadder();
@@ -51,65 +46,6 @@ export default function ViewLadderScreen({ navigation }) {
     }
   }, [ladder, activeTab]);
 
-  // Fetch teams and matchups for a specific session
-  const fetchSessionData = async (sessionId) => {
-    if (!sessionId || !ladder) return;
-
-    try {
-      setLoadingSessionData(prev => ({ ...prev, [sessionId]: true }));
-
-      // Fetch teams for this session
-      const teamsQuery = query(
-        collection(db, 'ladderteams'),
-        where('sessionId', '==', sessionId)
-      );
-      const teamsSnapshot = await getDocs(teamsQuery);
-      const teamsList = teamsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort teams by rank or points
-      teamsList.sort((a, b) => {
-        if (a.rank !== undefined && b.rank !== undefined) {
-          return (a.rank || 999) - (b.rank || 999);
-        }
-        return (b.points || 0) - (a.points || 0);
-      });
-
-      // Fetch matchups for this session
-      const matchupsQuery = query(
-        collection(db, 'matchups'),
-        where('sessionId', '==', sessionId)
-      );
-      const matchupsSnapshot = await getDocs(matchupsQuery);
-      const matchupsList = matchupsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Sort matchups by createdAt (newest first)
-      matchupsList.sort((a, b) => {
-        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
-        return bDate - aDate;
-      });
-
-      setSessionTeams(prev => ({ ...prev, [sessionId]: teamsList }));
-      setSessionMatchups(prev => ({ ...prev, [sessionId]: matchupsList }));
-    } catch (error) {
-      console.error(`Error fetching session data for ${sessionId}:`, error);
-    } finally {
-      setLoadingSessionData(prev => ({ ...prev, [sessionId]: false }));
-    }
-  };
-
-  // Fetch session data when session is expanded
-  useEffect(() => {
-    if (expandedSession && !sessionTeams[expandedSession] && !loadingSessionData[expandedSession]) {
-      fetchSessionData(expandedSession);
-    }
-  }, [expandedSession]);
 
   // Refetch ladder and sessions when screen comes into focus (e.g., after creating a team, matchup, or session)
   useFocusEffect(
@@ -117,12 +53,8 @@ export default function ViewLadderScreen({ navigation }) {
       if (ladderId) {
         fetchLadder();
         fetchSessions();
-        // Refetch expanded session data if a session is expanded
-        if (expandedSession) {
-          fetchSessionData(expandedSession);
-        }
       }
-    }, [ladderId, expandedSession])
+    }, [ladderId])
   );
 
   const fetchLadder = async () => {
@@ -389,11 +321,6 @@ export default function ViewLadderScreen({ navigation }) {
         memberIds: newMemberIds,
       });
 
-      // Update session data if expanded
-      if (teamToLeave.sessionId && expandedSession === teamToLeave.sessionId) {
-        await fetchSessionData(teamToLeave.sessionId);
-      }
-
       // Close modal
       setShowLeaveTeamModal(false);
       setTeamToLeave(null);
@@ -427,10 +354,6 @@ export default function ViewLadderScreen({ navigation }) {
       // Delete the team document
       await deleteDoc(doc(db, 'ladderteams', teamToDelete.id));
 
-      // Update session data if expanded
-      if (teamToDelete.sessionId && expandedSession === teamToDelete.sessionId) {
-        fetchSessionData(teamToDelete.sessionId);
-      }
 
       // Close modal
       setShowDeleteTeamModal(false);
@@ -540,7 +463,6 @@ export default function ViewLadderScreen({ navigation }) {
           const startDate = session.startDate?.toDate ? session.startDate.toDate() : null;
           const endDate = session.endDate?.toDate ? session.endDate.toDate() : null;
           const now = new Date();
-          const isExpanded = expandedSession === session.id;
           
           // Determine status
           let status = 'upcoming';
@@ -574,232 +496,32 @@ export default function ViewLadderScreen({ navigation }) {
           // Ranking method display
           const rankingMethodStr = session.rankingMethod === 'points' ? 'Points Based' : 'Win/Loss Based';
 
-          // Get teams/players and matchups for this session
-          const sessionTeamsList = sessionTeams[session.id] || [];
-          const sessionMatchupsList = sessionMatchups[session.id] || [];
-          const isLoadingSessionData = loadingSessionData[session.id];
-
           return (
-            <View key={session.id} style={styles.sessionCard}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (isExpanded) {
-                    setExpandedSession(null);
-                  } else {
-                    setExpandedSession(session.id);
-                    fetchSessionData(session.id);
-                  }
-                }}
-                style={styles.sessionHeaderClickable}
-              >
-                <View style={styles.sessionHeader}>
-                  <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
-                  <View style={styles.sessionHeaderRight}>
-                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                      <Text style={styles.statusBadgeText}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </Text>
-                    </View>
-                    <Text style={styles.sessionExpandIcon}>
-                      {isExpanded ? '▲' : '▼'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.sessionDetails}>
-                  <Text style={styles.sessionDetailText}>
-                    📅 {startDateStr} - {endDateStr}
-                  </Text>
-                  <Text style={styles.sessionDetailText}>
-                    ⏱️ Matchup expiration: {expirationStr}
-                  </Text>
-                  <Text style={styles.sessionDetailText}>
-                    📊 Ranking: {rankingMethodStr}
+            <TouchableOpacity
+              key={session.id}
+              style={styles.sessionCard}
+              onPress={() => navigation.navigate('ViewSession', { sessionId: session.id, ladderId: ladderId })}
+            >
+              <View style={styles.sessionHeader}>
+                <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                  <Text style={styles.statusBadgeText}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
                   </Text>
                 </View>
-              </TouchableOpacity>
-
-              {isExpanded && (
-                <View style={styles.sessionExpandedContent}>
-                  {isLoadingSessionData ? (
-                    <View style={styles.sessionLoadingContainer}>
-                      <ActivityIndicator size="small" color="#6C5CE7" />
-                    </View>
-                  ) : (
-                    <>
-                      {/* Teams/Players Section */}
-                      <View style={styles.sessionSection}>
-                        <View style={styles.sessionSectionHeader}>
-                          <Text style={styles.sessionSectionTitle}>
-                            {isSingles ? 'Players' : 'Teams'}
-                          </Text>
-                          {!isSingles && user && (
-                            <TouchableOpacity
-                              style={styles.sessionActionButton}
-                              onPress={() => navigation.navigate('CreateTeam', { sessionId: session.id, ladderId: ladderId })}
-                            >
-                              <Text style={styles.sessionActionButtonText}>Create Team</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                        {sessionTeamsList.length === 0 ? (
-                          <View style={styles.sessionEmptyState}>
-                            <Text style={styles.sessionEmptyStateText}>
-                              No {isSingles ? 'players' : 'teams'} in this session yet
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={styles.sessionItemsContainer}>
-                            {sessionTeamsList.map((team, index) => {
-                              if (isSingles) {
-                                // For singles, show players
-                                const playerMember = team.members && team.members[0];
-                                if (!playerMember) return null;
-                                
-                                // Construct member object from team data
-                                const member = {
-                                  userId: playerMember.userId,
-                                  nickname: playerMember.nickname || 'Unknown',
-                                  rank: team.rank,
-                                  points: team.points || 0,
-                                };
-
-                                return (
-                                  <View key={team.id || index} style={styles.sessionPlayerItem}>
-                                    <LadderMemberCard
-                                      member={member}
-                                      index={index}
-                                      isAdmin={ladder.adminList?.includes(member.userId) || false}
-                                      email={memberEmails[member.userId] || ''}
-                                      phoneNumber={memberPhoneNumbers[member.userId] || ''}
-                                    />
-                                  </View>
-                                );
-                              } else {
-                                // For doubles/teams, show teams
-                                const isCreator = user && team.createdBy === user.uid;
-                                const isMember = user && team.memberIds && team.memberIds.includes(user.uid);
-
-                                return (
-                                  <View key={team.id || index} style={styles.sessionTeamItem}>
-                                    <View style={{ flex: 1 }}>
-                                      <TeamCard team={team} index={index} />
-                                    </View>
-                                    {isMember && (
-                                      <View style={styles.teamActionButtons}>
-                                        {isCreator ? (
-                                          <>
-                                            <TouchableOpacity
-                                              style={styles.addPlayerButton}
-                                              onPress={() => navigation.navigate('AddPlayersToTeam', { teamId: team.id, ladderId: ladderId })}
-                                              disabled={saving}
-                                              accessibilityLabel="Add Players"
-                                              accessibilityHint="Tap to add players to this team"
-                                            >
-                                              <Text style={styles.addPlayerButtonIcon}>➕</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                              style={styles.deleteTeamButton}
-                                              onPress={() => handleDeleteTeam(team)}
-                                              disabled={saving}
-                                            >
-                                              <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
-                                            </TouchableOpacity>
-                                          </>
-                                        ) : (
-                                          <TouchableOpacity
-                                            style={styles.leaveTeamButton}
-                                            onPress={() => handleLeaveTeam(team)}
-                                            disabled={saving}
-                                            accessibilityLabel="Leave Team"
-                                            accessibilityHint="Tap to leave this team"
-                                          >
-                                            <Text style={styles.leaveTeamButtonIcon}>👋</Text>
-                                          </TouchableOpacity>
-                                        )}
-                                      </View>
-                                    )}
-                                  </View>
-                                );
-                              }
-                            })}
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Matchups Section */}
-                      <View style={styles.sessionSection}>
-                        <View style={styles.sessionSectionHeader}>
-                          <Text style={styles.sessionSectionTitle}>Matchups</Text>
-                          {ladder.isAdmin && (
-                            <TouchableOpacity
-                              style={styles.sessionActionButton}
-                              onPress={() => navigation.navigate('CreateMatchup', { sessionId: session.id, ladderId: ladderId })}
-                            >
-                              <Text style={styles.sessionActionButtonText}>Create Matchup</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                        {sessionMatchupsList.length === 0 ? (
-                          <View style={styles.sessionEmptyState}>
-                            <Text style={styles.sessionEmptyStateText}>No matchups in this session yet</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.sessionItemsContainer}>
-                            {sessionMatchupsList.map((matchup) => {
-                              const createdAt = matchup.createdAt?.toDate ? matchup.createdAt.toDate() : null;
-                              const expiresAt = matchup.expiresAt?.toDate ? matchup.expiresAt.toDate() : null;
-                              const now = new Date();
-                              const isExpired = expiresAt && expiresAt < now;
-                              const matchupStatus = matchup.status || 'pending';
-
-                              // Format dates
-                              const createdDateStr = createdAt 
-                                ? createdAt.toLocaleDateString() 
-                                : 'Unknown date';
-                              const expiresDateStr = expiresAt 
-                                ? expiresAt.toLocaleDateString() 
-                                : 'Unknown';
-
-                              // Get names
-                              const name1 = isSingles ? matchup.player1Name : matchup.team1Name;
-                              const name2 = isSingles ? matchup.player2Name : matchup.team2Name;
-
-                              return (
-                                <View key={matchup.id} style={styles.matchupCard}>
-                                  <View style={styles.matchupHeader}>
-                                    <Text style={styles.matchupNames}>
-                                      {name1 || 'Unknown'} vs {name2 || 'Unknown'}
-                                    </Text>
-                                    <View style={[
-                                      styles.statusBadge,
-                                      matchupStatus === 'completed' && styles.statusBadgeCompleted,
-                                      matchupStatus === 'pending' && !isExpired && styles.statusBadgePending,
-                                      isExpired && styles.statusBadgeExpired,
-                                    ]}>
-                                      <Text style={styles.statusBadgeText}>
-                                        {isExpired ? 'Expired' : matchupStatus.charAt(0).toUpperCase() + matchupStatus.slice(1)}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                  <View style={styles.matchupDetails}>
-                                    <Text style={styles.matchupDetailText}>
-                                      Created: {createdDateStr}
-                                    </Text>
-                                    <Text style={styles.matchupDetailText}>
-                                      Expires: {expiresDateStr}
-                                    </Text>
-                                  </View>
-                                </View>
-                              );
-                            })}
-                          </View>
-                        )}
-                      </View>
-                    </>
-                  )}
-                </View>
-              )}
-            </View>
+              </View>
+              <View style={styles.sessionDetails}>
+                <Text style={styles.sessionDetailText}>
+                  📅 {startDateStr} - {endDateStr}
+                </Text>
+                <Text style={styles.sessionDetailText}>
+                  ⏱️ Matchup expiration: {expirationStr}
+                </Text>
+                <Text style={styles.sessionDetailText}>
+                  📊 Ranking: {rankingMethodStr}
+                </Text>
+              </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>

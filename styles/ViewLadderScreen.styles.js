@@ -471,6 +471,7 @@ export default StyleSheet.create({
         elevation: 2,
       },
     }),
+    activeOpacity: 0.7,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -490,74 +491,5 @@ export default StyleSheet.create({
   sessionDetailText: {
     fontSize: 14,
     color: '#8B8FA8',
-  },
-  sessionHeaderClickable: {
-    width: '100%',
-  },
-  sessionHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sessionExpandIcon: {
-    fontSize: 14,
-    color: '#8B8FA8',
-    marginLeft: 8,
-  },
-  sessionExpandedContent: {
-    paddingTop: 16,
-    paddingHorizontal: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#252A45',
-    marginTop: 12,
-  },
-  sessionLoadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  sessionSection: {
-    marginBottom: 24,
-  },
-  sessionSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sessionSectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  sessionActionButton: {
-    backgroundColor: '#6C5CE7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  sessionActionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  sessionEmptyState: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  sessionEmptyStateText: {
-    fontSize: 14,
-    color: '#8B8FA8',
-    textAlign: 'center',
-  },
-  sessionItemsContainer: {
-    gap: 12,
-  },
-  sessionPlayerItem: {
-    marginBottom: 8,
-  },
-  sessionTeamItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
 });

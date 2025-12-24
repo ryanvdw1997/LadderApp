@@ -70,47 +70,34 @@ export default function CreateMatchupScreen({ navigation }) {
 
       const isSingles = ladderData.teamType === 'singles';
 
+      // Query teams from the session (teams are now stored with sessionId)
+      const teamsQuery = query(
+        collection(db, 'ladderteams'),
+        where('sessionId', '==', sessionId)
+      );
+      const teamsSnapshot = await getDocs(teamsQuery);
+      const teamsList = teamsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
       if (isSingles) {
-        // For singles, teams are individual players - fetch teams from session
-        const teamIds = sessionData.teamIds || [];
-        if (teamIds.length > 0) {
-          const teamDocs = await Promise.all(
-            teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
-          );
-          // Extract player info from single-player teams
-          const playersList = teamDocs
-            .filter(doc => doc.exists())
-            .map(doc => {
-              const teamData = doc.data();
-              const member = teamData.members && teamData.members[0];
-              return member ? {
-                userId: member.userId,
-                nickname: member.nickname || 'Unknown',
-                points: member.points || 0,
-              } : null;
-            })
-            .filter(p => p !== null);
-          setAvailablePlayers(playersList);
-        } else {
-          // If no teams in session yet, show all ladder members
-          const memberList = ladderData.memberList || [];
-          setAvailablePlayers(memberList);
-        }
+        // For singles, extract player info from single-player teams
+        const playersList = teamsList
+          .map(team => {
+            const member = team.members && team.members[0];
+            return member ? {
+              userId: member.userId,
+              nickname: member.nickname || 'Unknown',
+              points: team.points || 0,
+              rank: team.rank,
+            } : null;
+          })
+          .filter(p => p !== null);
+        setAvailablePlayers(playersList);
       } else {
-        // For doubles/teams, fetch teams from session
-        const teamIds = sessionData.teamIds || [];
-        if (teamIds.length > 0) {
-          const teamDocs = await Promise.all(
-            teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
-          );
-          const teamsList = teamDocs
-            .filter(doc => doc.exists())
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-            }));
-          setAvailableTeams(teamsList);
-        }
+        // For doubles/teams, use the teams directly
+        setAvailableTeams(teamsList);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
