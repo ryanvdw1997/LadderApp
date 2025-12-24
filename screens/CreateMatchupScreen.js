@@ -14,8 +14,9 @@ import styles from '../styles/CreateMatchupScreen.styles';
 
 export default function CreateMatchupScreen({ navigation }) {
   const route = useRoute();
-  const { ladderId } = route.params || {};
+  const { sessionId, ladderId } = route.params || {};
   
+  const [session, setSession] = useState(null);
   const [ladder, setLadder] = useState(null);
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [availableTeams, setAvailableTeams] = useState([]);
@@ -29,18 +30,31 @@ export default function CreateMatchupScreen({ navigation }) {
 
   useEffect(() => {
     fetchData();
-  }, [ladderId]);
+  }, [sessionId, ladderId]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      if (!ladderId) {
-        setError('No ladder ID provided');
+      if (!sessionId || !ladderId) {
+        setError('Missing session or ladder ID');
         setLoading(false);
         return;
       }
 
-      // Fetch ladder data
+      // Fetch session
+      const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+      if (!sessionDoc.exists()) {
+        setError('Session not found');
+        setLoading(false);
+        return;
+      }
+      const sessionData = sessionDoc.data();
+      setSession({
+        id: sessionDoc.id,
+        ...sessionData,
+      });
+
+      // Fetch ladder data to determine team type
       const ladderDoc = await getDoc(doc(db, 'ladders', ladderId));
       if (!ladderDoc.exists()) {
         setError('Ladder not found');
@@ -57,12 +71,34 @@ export default function CreateMatchupScreen({ navigation }) {
       const isSingles = ladderData.teamType === 'singles';
 
       if (isSingles) {
-        // Fetch players
-        const memberList = ladderData.memberList || [];
-        setAvailablePlayers(memberList);
+        // For singles, teams are individual players - fetch teams from session
+        const teamIds = sessionData.teamIds || [];
+        if (teamIds.length > 0) {
+          const teamDocs = await Promise.all(
+            teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
+          );
+          // Extract player info from single-player teams
+          const playersList = teamDocs
+            .filter(doc => doc.exists())
+            .map(doc => {
+              const teamData = doc.data();
+              const member = teamData.members && teamData.members[0];
+              return member ? {
+                userId: member.userId,
+                nickname: member.nickname || 'Unknown',
+                points: member.points || 0,
+              } : null;
+            })
+            .filter(p => p !== null);
+          setAvailablePlayers(playersList);
+        } else {
+          // If no teams in session yet, show all ladder members
+          const memberList = ladderData.memberList || [];
+          setAvailablePlayers(memberList);
+        }
       } else {
-        // Fetch teams
-        const teamIds = ladderData.teamIds || [];
+        // For doubles/teams, fetch teams from session
+        const teamIds = sessionData.teamIds || [];
         if (teamIds.length > 0) {
           const teamDocs = await Promise.all(
             teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
@@ -92,10 +128,10 @@ export default function CreateMatchupScreen({ navigation }) {
       return;
     }
 
-    if (!ladder) {
-      setError('Ladder not loaded');
-      return;
-    }
+      if (!session || !ladder) {
+        setError('Session or ladder not loaded');
+        return;
+      }
 
     const isSingles = ladder.teamType === 'singles';
     
@@ -123,15 +159,16 @@ export default function CreateMatchupScreen({ navigation }) {
     try {
       setSaving(true);
 
-      // Calculate expiration date
-      const expirationDays = ladder.matchExpirationDays || 7;
+      // Calculate expiration based on session settings
+      const expirationDays = session?.expirationDays || ladder?.matchExpirationDays || 7;
       const createdAt = new Date();
       const expiresAt = new Date(createdAt);
       expiresAt.setDate(expiresAt.getDate() + expirationDays);
 
       // Create matchup document
       const matchupData = {
-        ladderId: ladderId,
+        sessionId: sessionId,
+        ladderId: ladderId, // Keep for reference
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         expiresAt: Timestamp.fromDate(expiresAt),

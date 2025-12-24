@@ -38,6 +38,8 @@ export default function ViewLadderScreen({ navigation }) {
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [matchups, setMatchups] = useState([]);
   const [loadingMatchups, setLoadingMatchups] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
   useEffect(() => {
     fetchLadder();
@@ -50,7 +52,17 @@ export default function ViewLadderScreen({ navigation }) {
     if (ladder && activeTab === 'matches') {
       fetchMatchups();
     }
+    if (ladder && activeTab === 'sessions') {
+      fetchSessions();
+    }
   }, [ladder, activeTab]);
+
+  // Fetch sessions when ladder is loaded (needed for getActiveSession)
+  useEffect(() => {
+    if (ladder && ladderId) {
+      fetchSessions();
+    }
+  }, [ladder, ladderId]);
 
   // Refetch ladder when screen comes into focus (e.g., after creating a team or matchup)
   // The useEffect watching ladder and activeTab will automatically fetch teams/matchups if needed
@@ -120,24 +132,25 @@ export default function ViewLadderScreen({ navigation }) {
   };
 
   const fetchTeams = async () => {
-    if (!ladder || !ladder.teamIds || ladder.teamIds.length === 0) {
+    if (!ladder || !ladderId) {
       setTeams([]);
       return;
     }
 
     try {
       setLoadingTeams(true);
-      const teamDocs = await Promise.all(
-        ladder.teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
+      // Query all teams for this ladder (teams are now tied to sessions, but still have ladderId for reference)
+      const teamsQuery = query(
+        collection(db, 'ladderteams'),
+        where('ladderId', '==', ladderId)
       );
+      const teamsSnapshot = await getDocs(teamsQuery);
 
-      const teamsList = teamDocs
-        .filter(doc => doc.exists())
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          ladderId: ladderId, // Ensure ladderId is included
-        }));
+      const teamsList = teamsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        ladderId: ladderId,
+      }));
 
       // Sort teams by rank (ascending, 1 is best) or by points (descending) if no rank
       teamsList.sort((a, b) => {
@@ -164,6 +177,7 @@ export default function ViewLadderScreen({ navigation }) {
 
     try {
       setLoadingMatchups(true);
+      // Query all matchups for this ladder (matchups are now tied to sessions, but still have ladderId for reference)
       const matchupsQuery = query(
         collection(db, 'matchups'),
         where('ladderId', '==', ladderId)
@@ -189,6 +203,62 @@ export default function ViewLadderScreen({ navigation }) {
     } finally {
       setLoadingMatchups(false);
     }
+  };
+
+  const fetchSessions = async () => {
+    if (!ladder || !ladderId) {
+      setSessions([]);
+      return;
+    }
+
+    try {
+      setLoadingSessions(true);
+      const sessionsQuery = query(
+        collection(db, 'sessions'),
+        where('ladderId', '==', ladderId)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      
+      const sessionsList = sessionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Sort by startDate (newest first)
+      sessionsList.sort((a, b) => {
+        const aDate = a.startDate?.toDate ? a.startDate.toDate() : new Date(0);
+        const bDate = b.startDate?.toDate ? b.startDate.toDate() : new Date(0);
+        return bDate - aDate;
+      });
+
+      setSessions(sessionsList);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      setSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  // Helper to get active or most recent session
+  const getActiveSession = () => {
+    if (!sessions || sessions.length === 0) return null;
+    
+    const now = new Date();
+    // First try to find active session
+    const activeSession = sessions.find(session => {
+      const startDate = session.startDate?.toDate ? session.startDate.toDate() : null;
+      const endDate = session.endDate?.toDate ? session.endDate.toDate() : null;
+      if (startDate && endDate) {
+        return now >= startDate && now <= endDate;
+      }
+      return false;
+    });
+    
+    if (activeSession) return activeSession;
+    
+    // Otherwise return most recent session
+    return sessions[0];
   };
 
   const isSingles = ladder?.teamType === 'singles';
@@ -554,6 +624,93 @@ export default function ViewLadderScreen({ navigation }) {
     );
   };
 
+  const renderSessionsList = () => {
+    if (loadingSessions) {
+      return (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color="#6C5CE7" />
+        </View>
+      );
+    }
+
+    if (sessions.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>No sessions yet</Text>
+          <Text style={styles.emptyStateSubtext}>
+            Create a session to organize matchups by time period
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.listContainer}>
+        {sessions.map((session) => {
+          const startDate = session.startDate?.toDate ? session.startDate.toDate() : null;
+          const endDate = session.endDate?.toDate ? session.endDate.toDate() : null;
+          const now = new Date();
+          
+          // Determine status
+          let status = 'upcoming';
+          let statusColor = '#FFA726'; // orange for upcoming
+          if (startDate && endDate) {
+            if (now < startDate) {
+              status = 'upcoming';
+              statusColor = '#FFA726';
+            } else if (now >= startDate && now <= endDate) {
+              status = 'active';
+              statusColor = '#66BB6A'; // green for active
+            } else {
+              status = 'completed';
+              statusColor = '#8B8FA8'; // gray for completed
+            }
+          }
+
+          // Format dates
+          const startDateStr = startDate 
+            ? startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : 'Unknown';
+          const endDateStr = endDate 
+            ? endDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : 'Unknown';
+
+          // Format expiration
+          const expirationStr = session.expirationUnit === 'weeks'
+            ? `${session.expirationValue} ${session.expirationValue === 1 ? 'week' : 'weeks'}`
+            : `${session.expirationValue} ${session.expirationValue === 1 ? 'day' : 'days'}`;
+
+          // Ranking method display
+          const rankingMethodStr = session.rankingMethod === 'points' ? 'Points Based' : 'Win/Loss Based';
+
+          return (
+            <View key={session.id} style={styles.sessionCard}>
+              <View style={styles.sessionHeader}>
+                <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                  <Text style={styles.statusBadgeText}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.sessionDetails}>
+                <Text style={styles.sessionDetailText}>
+                  📅 {startDateStr} - {endDateStr}
+                </Text>
+                <Text style={styles.sessionDetailText}>
+                  ⏱️ Matchup expiration: {expirationStr}
+                </Text>
+                <Text style={styles.sessionDetailText}>
+                  📊 Ranking: {rankingMethodStr}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const renderMatchesList = () => {
     if (loadingMatchups) {
       return (
@@ -645,20 +802,48 @@ export default function ViewLadderScreen({ navigation }) {
         <View style={styles.headerTitleRow}>
           <Text style={styles.title}>{ladder.name}</Text>
           <View style={styles.headerButtons}>
-            {showTeamsTab && (
+            {showTeamsTab && (() => {
+              const activeSession = getActiveSession();
+              return (
+                <TouchableOpacity
+                  style={[styles.createTeamButton, !activeSession && styles.createTeamButtonDisabled]}
+                  onPress={() => {
+                    if (activeSession) {
+                      navigation.navigate('CreateTeam', { sessionId: activeSession.id, ladderId: ladderId });
+                    } else {
+                      alert('Please create a session first before creating teams.');
+                    }
+                  }}
+                  disabled={!activeSession}
+                >
+                  <Text style={styles.createTeamButtonText}>Create Team</Text>
+                </TouchableOpacity>
+              );
+            })()}
+            {ladder.isAdmin && activeTab === 'matches' && (() => {
+              const activeSession = getActiveSession();
+              return (
+                <TouchableOpacity
+                  style={[styles.createMatchupButton, !activeSession && styles.createMatchupButtonDisabled]}
+                  onPress={() => {
+                    if (activeSession) {
+                      navigation.navigate('CreateMatchup', { sessionId: activeSession.id, ladderId: ladderId });
+                    } else {
+                      alert('Please create a session first before creating matchups.');
+                    }
+                  }}
+                  disabled={!activeSession}
+                >
+                  <Text style={styles.createMatchupButtonText}>Create Matchup</Text>
+                </TouchableOpacity>
+              );
+            })()}
+            {ladder.isAdmin && activeTab === 'sessions' && (
               <TouchableOpacity
-                style={styles.createTeamButton}
-                onPress={() => navigation.navigate('CreateTeam', { ladderId: ladderId })}
+                style={styles.createSessionButton}
+                onPress={() => navigation.navigate('CreateSession', { ladderId: ladderId })}
               >
-                <Text style={styles.createTeamButtonText}>Create Team</Text>
-              </TouchableOpacity>
-            )}
-            {ladder.isAdmin && activeTab === 'matches' && (
-              <TouchableOpacity
-                style={styles.createMatchupButton}
-                onPress={() => navigation.navigate('CreateMatchup', { ladderId: ladderId })}
-              >
-                <Text style={styles.createMatchupButtonText}>Create Matchup</Text>
+                <Text style={styles.createSessionButtonText}>Create Session</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -692,6 +877,16 @@ export default function ViewLadderScreen({ navigation }) {
             Matches
           </Text>
         </TouchableOpacity>
+        {ladder.isAdmin && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'sessions' && styles.activeTab]}
+            onPress={() => setActiveTab('sessions')}
+          >
+            <Text style={[styles.tabText, activeTab === 'sessions' && styles.activeTabText]}>
+              Sessions
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -702,6 +897,7 @@ export default function ViewLadderScreen({ navigation }) {
         {activeTab === 'players' && renderPlayersList()}
         {activeTab === 'teams' && renderTeamsList()}
         {activeTab === 'matches' && renderMatchesList()}
+        {activeTab === 'sessions' && renderSessionsList()}
       </ScrollView>
 
       {/* Make Admin Confirmation Modal */}

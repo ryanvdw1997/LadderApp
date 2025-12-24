@@ -144,7 +144,6 @@ export default function CreateLadderScreen({ navigation }) {
         adminList: [user.uid],
         memberList: [memberObject],
         memberIds: [user.uid], // Denormalized array for security rules
-        teamIds: [], // Array of team document IDs
         public: isPublic ? 1 : 0,
         joinCode: joinCode,
         matchExpirationDays: matchExpirationDays,

@@ -17,8 +17,9 @@ import styles from '../styles/CreateTeamScreen.styles';
 
 export default function CreateTeamScreen({ navigation }) {
   const route = useRoute();
-  const { ladderId } = route.params || {};
+  const { sessionId, ladderId } = route.params || {};
   
+  const [session, setSession] = useState(null);
   const [ladder, setLadder] = useState(null);
   const [teamName, setTeamName] = useState('');
   const [selectedPlayers, setSelectedPlayers] = useState([]);
@@ -29,32 +30,45 @@ export default function CreateTeamScreen({ navigation }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchLadderData();
-  }, [ladderId]);
+    fetchData();
+  }, [sessionId, ladderId]);
 
-  const fetchLadderData = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      if (!ladderId) {
-        setError('No ladder ID provided');
+      if (!sessionId || !ladderId) {
+        setError('Missing session or ladder ID');
         setLoading(false);
         return;
       }
 
+      // Fetch session
+      const sessionDoc = await getDoc(doc(db, 'sessions', sessionId));
+      if (!sessionDoc.exists()) {
+        setError('Session not found');
+        setLoading(false);
+        return;
+      }
+      const sessionData = sessionDoc.data();
+      setSession({
+        id: sessionDoc.id,
+        ...sessionData,
+      });
+
+      // Fetch ladder to get member list and team type
       const ladderDoc = await getDoc(doc(db, 'ladders', ladderId));
       if (!ladderDoc.exists()) {
         setError('Ladder not found');
         setLoading(false);
         return;
       }
-
       const ladderData = ladderDoc.data();
       setLadder({
         id: ladderDoc.id,
         ...ladderData,
       });
 
-      // Get member list
+      // Get member list from ladder
       const memberList = ladderData.memberList || [];
       setAvailableMembers(memberList);
 
@@ -84,8 +98,8 @@ export default function CreateTeamScreen({ navigation }) {
         setSelectedPlayers([user.uid]);
       }
     } catch (error) {
-      console.error('Error fetching ladder data:', error);
-      setError('Failed to load ladder data');
+      console.error('Error fetching data:', error);
+      setError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -151,16 +165,16 @@ export default function CreateTeamScreen({ navigation }) {
     try {
       setSaving(true);
 
-      // Check if user is already on a team in this ladder
+      // Check if user is already on a team in this session
       const existingTeamsQuery = query(
         collection(db, 'ladderteams'),
-        where('ladderId', '==', ladderId),
+        where('sessionId', '==', sessionId),
         where('memberIds', 'array-contains', user.uid)
       );
       const existingTeamsSnapshot = await getDocs(existingTeamsQuery);
       
       if (!existingTeamsSnapshot.empty) {
-        setError('You are already on a team in this ladder. Please leave your current team before creating a new one.');
+        setError('You are already on a team in this session. Please leave your current team before creating a new one.');
         setSaving(false);
         return;
       }
@@ -177,7 +191,8 @@ export default function CreateTeamScreen({ navigation }) {
       }];
 
       const teamDocRef = await addDoc(collection(db, 'ladderteams'), {
-        ladderId: ladderId,
+        sessionId: sessionId,
+        ladderId: ladderId, // Keep ladderId for reference
         name: teamName.trim(),
         members: teamMembers,
         memberIds: [user.uid], // Only creator initially
@@ -187,11 +202,11 @@ export default function CreateTeamScreen({ navigation }) {
         createdBy: user.uid,
       });
 
-      // Add team ID to ladder's teamIds array
-      const currentTeamIds = ladder.teamIds || [];
+      // Add team ID to session's teamIds array
+      const currentTeamIds = session.teamIds || [];
       const newTeamIds = [...currentTeamIds, teamDocRef.id];
 
-      await updateDoc(doc(db, 'ladders', ladderId), {
+      await updateDoc(doc(db, 'sessions', sessionId), {
         teamIds: newTeamIds,
       });
 
@@ -201,14 +216,15 @@ export default function CreateTeamScreen({ navigation }) {
         
         otherPlayers.forEach(recipientId => {
           const inviteRef = doc(collection(db, 'teaminvites'));
-          batch.set(inviteRef, {
-            senderId: user.uid,
-            recipientId: recipientId,
-            teamId: teamDocRef.id,
-            ladderId: ladderId,
-            status: 'pending',
-            createdAt: serverTimestamp(),
-          });
+            batch.set(inviteRef, {
+              senderId: user.uid,
+              recipientId: recipientId,
+              teamId: teamDocRef.id,
+              sessionId: sessionId,
+              ladderId: ladderId, // Keep for reference
+              status: 'pending',
+              createdAt: serverTimestamp(),
+            });
         });
 
         await batch.commit();

@@ -86,7 +86,9 @@ export default function MyLaddersScreen({ navigation }) {
   };
 
   const handleCreateTeam = (ladder) => {
-    navigation.navigate('CreateTeam', { ladderId: ladder.id });
+    // Note: Teams are now created within sessions, so this should navigate to sessions first
+    // For now, navigate to ViewLadder where user can create teams in a session
+    navigation.navigate('ViewLadder', { ladderId: ladder.id });
   };
 
   const confirmDelete = async () => {

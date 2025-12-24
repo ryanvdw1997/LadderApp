@@ -174,16 +174,26 @@ export default function TeamInvitesScreen({ navigation }) {
       const memberList = ladderData.memberList || [];
       const userMemberData = memberList.find(m => m.userId === user.uid);
 
-      // Check if user is already on a team in this ladder
+      // Get sessionId from team data
+      const sessionId = teamData.sessionId;
+      if (!sessionId) {
+        alert('Team session not found');
+        setShowAcceptModal(false);
+        setSelectedInvite(null);
+        setSaving(false);
+        return;
+      }
+
+      // Check if user is already on a team in this session
       const existingTeamsQuery = query(
         collection(db, 'ladderteams'),
-        where('ladderId', '==', selectedInvite.ladderId),
+        where('sessionId', '==', sessionId),
         where('memberIds', 'array-contains', user.uid)
       );
       const existingTeamsSnapshot = await getDocs(existingTeamsQuery);
       
       if (!existingTeamsSnapshot.empty) {
-        alert('You are already on a team in this ladder. Please leave your current team before accepting this invite.');
+        alert('You are already on a team in this session. Please leave your current team before accepting this invite.');
         setShowAcceptModal(false);
         setSelectedInvite(null);
         setSaving(false);

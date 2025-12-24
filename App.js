@@ -17,6 +17,7 @@ import MyTeamsScreen from './screens/MyTeamsScreen';
 import AddPlayersToTeamScreen from './screens/AddPlayersToTeamScreen';
 import TeamInvitesScreen from './screens/TeamInvitesScreen';
 import CreateMatchupScreen from './screens/CreateMatchupScreen';
+import CreateSessionScreen from './screens/CreateSessionScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -54,6 +55,7 @@ export default function App() {
             <Stack.Screen name="AddPlayersToTeam" component={AddPlayersToTeamScreen} />
             <Stack.Screen name="TeamInvites" component={TeamInvitesScreen} />
             <Stack.Screen name="CreateMatchup" component={CreateMatchupScreen} />
+            <Stack.Screen name="CreateSession" component={CreateSessionScreen} />
           </>
         ) : (
           <>
