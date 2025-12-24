@@ -10,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewLadderScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
@@ -35,6 +35,8 @@ export default function ViewLadderScreen({ navigation }) {
   const [teamToDelete, setTeamToDelete] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [userSessionStatus, setUserSessionStatus] = useState({}); // sessionId -> boolean (true if user is in session)
+  const [joiningSession, setJoiningSession] = useState(null);
 
   useEffect(() => {
     fetchLadder();
@@ -52,9 +54,11 @@ export default function ViewLadderScreen({ navigation }) {
     useCallback(() => {
       if (ladderId) {
         fetchLadder();
-        fetchSessions();
+        if (activeTab === 'sessions') {
+          fetchSessions();
+        }
       }
-    }, [ladderId])
+    }, [ladderId, activeTab])
   );
 
   const fetchLadder = async () => {
@@ -141,6 +145,27 @@ export default function ViewLadderScreen({ navigation }) {
       });
 
       setSessions(sessionsList);
+
+      // Check if user is already in each session
+      const user = auth.currentUser;
+      if (user) {
+        const statusMap = {};
+        await Promise.all(sessionsList.map(async (session) => {
+          try {
+            const teamsQuery = query(
+              collection(db, 'ladderteams'),
+              where('sessionId', '==', session.id),
+              where('memberIds', 'array-contains', user.uid)
+            );
+            const teamsSnapshot = await getDocs(teamsQuery);
+            statusMap[session.id] = !teamsSnapshot.empty;
+          } catch (error) {
+            console.error(`Error checking session status for ${session.id}:`, error);
+            statusMap[session.id] = false;
+          }
+        }));
+        setUserSessionStatus(statusMap);
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
       setSessions([]);
@@ -371,6 +396,75 @@ export default function ViewLadderScreen({ navigation }) {
     setTeamToDelete(null);
   };
 
+  const handleJoinSession = async (session) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const isSingles = ladder?.teamType === 'singles';
+
+    if (isSingles) {
+      // For singles, create a single-player team automatically
+      try {
+        setJoiningSession(session.id);
+        
+        // Check if user is already on a team in this session
+        const existingTeamsQuery = query(
+          collection(db, 'ladderteams'),
+          where('sessionId', '==', session.id),
+          where('memberIds', 'array-contains', user.uid)
+        );
+        const existingTeamsSnapshot = await getDocs(existingTeamsQuery);
+        
+        if (!existingTeamsSnapshot.empty) {
+          alert('You are already in this session.');
+          setJoiningSession(null);
+          return;
+        }
+
+        // Get user's member data from ladder
+        const memberList = ladder.memberList || [];
+        const userMemberData = memberList.find(m => m.userId === user.uid);
+        
+        if (!userMemberData) {
+          alert('You must be a member of the ladder to join a session.');
+          setJoiningSession(null);
+          return;
+        }
+
+        // Create single-player team
+        const teamMembers = [{
+          userId: user.uid,
+          nickname: userMemberData.nickname || 'Unknown',
+          points: userMemberData.points || 0,
+        }];
+
+        await addDoc(collection(db, 'ladderteams'), {
+          sessionId: session.id,
+          ladderId: ladderId,
+          name: userMemberData.nickname || 'Player', // For singles, team name is player name
+          members: teamMembers,
+          memberIds: [user.uid],
+          points: 0,
+          rank: 0,
+          createdAt: serverTimestamp(),
+          createdBy: user.uid,
+        });
+
+        // Update user session status
+        setUserSessionStatus(prev => ({ ...prev, [session.id]: true }));
+        alert('Successfully joined session!');
+      } catch (error) {
+        console.error('Error joining session:', error);
+        alert('Failed to join session. Please try again.');
+      } finally {
+        setJoiningSession(null);
+      }
+    } else {
+      // For doubles/teams, navigate to CreateTeamScreen
+      navigation.navigate('CreateTeam', { sessionId: session.id, ladderId: ladderId });
+    }
+  };
+
   const renderPlayersList = () => {
     if (sortedMembers.length === 0) {
       return (
@@ -495,33 +589,49 @@ export default function ViewLadderScreen({ navigation }) {
 
           // Ranking method display
           const rankingMethodStr = session.rankingMethod === 'points' ? 'Points Based' : 'Win/Loss Based';
+          
+          // Check if user is already in this session
+          const isUserInSession = userSessionStatus[session.id] || false;
+          const isJoining = joiningSession === session.id;
 
           return (
-            <TouchableOpacity
-              key={session.id}
-              style={styles.sessionCard}
-              onPress={() => navigation.navigate('ViewSession', { sessionId: session.id, ladderId: ladderId })}
-            >
-              <View style={styles.sessionHeader}>
-                <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                  <Text style={styles.statusBadgeText}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+            <View key={session.id} style={styles.sessionCard}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ViewSession', { sessionId: session.id, ladderId: ladderId })}
+                style={styles.sessionCardContent}
+              >
+                <View style={styles.sessionHeader}>
+                  <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                    <Text style={styles.statusBadgeText}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.sessionDetails}>
+                  <Text style={styles.sessionDetailText}>
+                    📅 {startDateStr} - {endDateStr}
+                  </Text>
+                  <Text style={styles.sessionDetailText}>
+                    ⏱️ Matchup expiration: {expirationStr}
+                  </Text>
+                  <Text style={styles.sessionDetailText}>
+                    📊 Ranking: {rankingMethodStr}
                   </Text>
                 </View>
-              </View>
-              <View style={styles.sessionDetails}>
-                <Text style={styles.sessionDetailText}>
-                  📅 {startDateStr} - {endDateStr}
-                </Text>
-                <Text style={styles.sessionDetailText}>
-                  ⏱️ Matchup expiration: {expirationStr}
-                </Text>
-                <Text style={styles.sessionDetailText}>
-                  📊 Ranking: {rankingMethodStr}
-                </Text>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              {!isUserInSession && (
+                <TouchableOpacity
+                  style={[styles.joinSessionButton, isJoining && styles.joinSessionButtonDisabled]}
+                  onPress={() => handleJoinSession(session)}
+                  disabled={isJoining}
+                >
+                  <Text style={styles.joinSessionButtonText}>
+                    {isJoining ? 'Joining...' : 'Join Session'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           );
         })}
       </ScrollView>

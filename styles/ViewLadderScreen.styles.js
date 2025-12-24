@@ -471,7 +471,36 @@ export default StyleSheet.create({
         elevation: 2,
       },
     }),
+  },
+  sessionCardContent: {
     activeOpacity: 0.7,
+  },
+  joinSessionButton: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  joinSessionButtonDisabled: {
+    opacity: 0.6,
+  },
+  joinSessionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   sessionHeader: {
     flexDirection: 'row',
