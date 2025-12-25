@@ -35,5 +35,10 @@ service cloud.firestore {
     match /sessions/{sessionId} {
       allow create, read, update, delete, list: if request.auth != null;
     }
+    // Sessions collection rules
+    // All business logic checks are handled in application code
+    match /laddermembers/{laddermemberId} {
+      allow create, read, update, delete, list: if request.auth != null;
+    }
   }
 }

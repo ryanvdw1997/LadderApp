@@ -171,8 +171,21 @@ export default function TeamInvitesScreen({ navigation }) {
       }
 
       const ladderData = ladderDoc.data();
-      const memberList = ladderData.memberList || [];
-      const userMemberData = memberList.find(m => m.userId === user.uid);
+      
+      // Get user's member data from laddermembers
+      const userMemberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', selectedInvite.ladderId),
+        where('memberId', '==', user.uid)
+      );
+      const userMemberSnapshot = await getDocs(userMemberQuery);
+      const userMemberData = !userMemberSnapshot.empty 
+        ? {
+            userId: userMemberSnapshot.docs[0].data().memberId,
+            nickname: userMemberSnapshot.docs[0].data().nickname || 'Unknown',
+            points: userMemberSnapshot.docs[0].data().points || 0,
+          }
+        : null;
 
       // Get sessionId from team data
       const sessionId = teamData.sessionId;

@@ -7,9 +7,10 @@ import {
   ScrollView,
   SafeAreaView,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewSessionScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
@@ -31,6 +32,12 @@ export default function ViewSessionScreen({ navigation }) {
   const [loadingCompletedMatchups, setLoadingCompletedMatchups] = useState(false);
   const [memberEmails, setMemberEmails] = useState({});
   const [memberPhoneNumbers, setMemberPhoneNumbers] = useState({});
+  const [userTeamId, setUserTeamId] = useState(null); // Track which team the user is on
+  const [showLeaveTeamModal, setShowLeaveTeamModal] = useState(false);
+  const [teamToLeave, setTeamToLeave] = useState(null);
+  const [saving, setSaving] = useState(false);
+      const [adminIds, setAdminIds] = useState(new Set());
+      const [ladderMembers, setLadderMembers] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -57,7 +64,20 @@ export default function ViewSessionScreen({ navigation }) {
       }
       const ladderData = ladderDoc.data();
       const user = auth.currentUser;
-      const isAdmin = user && ladderData.adminList && ladderData.adminList.includes(user.uid);
+      
+      // Query laddermembers to check if user is admin
+      let isAdmin = false;
+      if (user) {
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('memberId', '==', user.uid),
+          where('isAdmin', '==', true)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        isAdmin = !membersSnapshot.empty;
+      }
+      
       setLadder({
         id: ladderDoc.id,
         ...ladderData,
@@ -76,31 +96,63 @@ export default function ViewSessionScreen({ navigation }) {
         ...sessionDoc.data(),
       });
 
+      // Fetch members from laddermembers collection
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      const membersList = membersSnapshot.docs.map((memberDoc) => {
+        const memberData = memberDoc.data();
+        return {
+          userId: memberData.memberId,
+          nickname: memberData.nickname || 'Unknown',
+          points: memberData.points || 0,
+          rank: memberData.rank || 0,
+        };
+      });
+      setLadderMembers(membersList);
+
       // Fetch member emails and phone numbers
-      const memberList = ladderData.memberList || [];
       const emailMap = {};
       const phoneMap = {};
       
-      const userDataPromises = memberList.map(async (member) => {
+      const userDataPromises = membersSnapshot.docs.map(async (memberDoc) => {
+        const memberData = memberDoc.data();
+        const userId = memberData.memberId;
         try {
           const q = query(
             collection(db, 'users'),
-            where('uid', '==', member.userId)
+            where('uid', '==', userId)
           );
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
             const userData = querySnapshot.docs[0].data();
-            emailMap[member.userId] = userData.email || '';
-            phoneMap[member.userId] = userData.phoneNumber || '';
+            emailMap[userId] = userData.email || '';
+            phoneMap[userId] = userData.phoneNumber || '';
           }
         } catch (error) {
-          console.error(`Error fetching user data for user ${member.userId}:`, error);
+          console.error(`Error fetching user data for user ${userId}:`, error);
         }
       });
 
       await Promise.all(userDataPromises);
       setMemberEmails(emailMap);
       setMemberPhoneNumbers(phoneMap);
+
+      // Fetch admin IDs for checking admin status
+      const adminQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('isAdmin', '==', true)
+      );
+      const adminSnapshot = await getDocs(adminQuery);
+      const ids = new Set();
+      adminSnapshot.forEach((doc) => {
+        ids.add(doc.data().memberId);
+      });
+      setAdminIds(ids);
 
       // Fetch teams and matchups
       await Promise.all([
@@ -117,6 +169,9 @@ export default function ViewSessionScreen({ navigation }) {
   const fetchTeams = async () => {
     if (!sessionId) return;
 
+    const user = auth.currentUser;
+    if (!user) return;
+
     try {
       setLoadingTeams(true);
       const teamsQuery = query(
@@ -128,6 +183,12 @@ export default function ViewSessionScreen({ navigation }) {
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Check if user is on any team in this session
+      const userTeam = teamsList.find(team => 
+        team.memberIds && team.memberIds.includes(user.uid)
+      );
+      setUserTeamId(userTeam ? userTeam.id : null);
 
       // Sort teams by rank or points
       teamsList.sort((a, b) => {
@@ -208,6 +269,63 @@ export default function ViewSessionScreen({ navigation }) {
 
   const isSingles = ladder?.teamType === 'singles';
 
+  const handleLeaveTeam = (team) => {
+    setTeamToLeave(team);
+    setShowLeaveTeamModal(true);
+  };
+
+  const confirmLeaveTeam = async () => {
+    if (!teamToLeave) return;
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setSaving(true);
+
+      // Get current team data
+      const teamDoc = await getDoc(doc(db, 'ladderteams', teamToLeave.id));
+      if (!teamDoc.exists()) {
+        alert('Team not found');
+        setShowLeaveTeamModal(false);
+        setTeamToLeave(null);
+        setSaving(false);
+        return;
+      }
+
+      const teamData = teamDoc.data();
+      const currentMembers = teamData.members || [];
+      const currentMemberIds = teamData.memberIds || [];
+
+      // Remove user from members and memberIds
+      const newMembers = currentMembers.filter(m => m.userId !== user.uid);
+      const newMemberIds = currentMemberIds.filter(id => id !== user.uid);
+
+      await updateDoc(doc(db, 'ladderteams', teamToLeave.id), {
+        members: newMembers,
+        memberIds: newMemberIds,
+      });
+
+      // Update userTeamId state
+      setUserTeamId(null);
+
+      // Close modal and refresh teams list
+      setShowLeaveTeamModal(false);
+      setTeamToLeave(null);
+      await fetchTeams();
+    } catch (error) {
+      console.error('Error leaving team:', error);
+      alert('Failed to leave team. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelLeaveTeam = () => {
+    setShowLeaveTeamModal(false);
+    setTeamToLeave(null);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -277,7 +395,7 @@ export default function ViewSessionScreen({ navigation }) {
                 <LadderMemberCard
                   member={member}
                   index={index}
-                  isAdmin={ladder.adminList?.includes(member.userId) || false}
+                  isAdmin={adminIds.has(member.userId)}
                   email={memberEmails[member.userId] || ''}
                   phoneNumber={memberPhoneNumbers[member.userId] || ''}
                 />
@@ -285,9 +403,24 @@ export default function ViewSessionScreen({ navigation }) {
             );
           } else {
             // For doubles/teams, show teams
+            const isUserOnTeam = user && team.memberIds && team.memberIds.includes(user.uid);
+            
             return (
               <View key={team.id || index} style={styles.itemWrapper}>
-                <TeamCard team={team} index={index} />
+                <View style={styles.teamCardWrapper}>
+                  <TeamCard team={team} index={index} />
+                  {isUserOnTeam && (
+                    <TouchableOpacity
+                      style={styles.leaveTeamButton}
+                      onPress={() => handleLeaveTeam(team)}
+                      disabled={saving}
+                      accessibilityLabel="Leave Team"
+                      accessibilityHint="Tap to leave this team"
+                    >
+                      <Text style={styles.leaveTeamButtonIcon}>👋</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             );
           }
@@ -407,7 +540,7 @@ export default function ViewSessionScreen({ navigation }) {
           <Text style={styles.sessionInfoText}>
             📅 {startDateStr} - {endDateStr}
           </Text>
-          {!isSingles && (
+          {!isSingles && !userTeamId && (
             <TouchableOpacity
               style={styles.createTeamButton}
               onPress={() => navigation.navigate('CreateTeam', { sessionId: sessionId, ladderId: ladderId })}
@@ -448,6 +581,43 @@ export default function ViewSessionScreen({ navigation }) {
       {activeTab === 'players' && renderPlayersOrTeamsList()}
       {activeTab === 'active' && renderMatchupsList(activeMatchups, loadingActiveMatchups)}
       {activeTab === 'completed' && renderMatchupsList(completedMatchups, loadingCompletedMatchups)}
+
+      {/* Leave Team Confirmation Modal */}
+      <Modal
+        visible={showLeaveTeamModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLeaveTeam}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Leave Team</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to leave <Text style={styles.modalBoldText}>{teamToLeave?.name}</Text>?
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelLeaveTeam}
+                disabled={saving}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={confirmLeaveTeam}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

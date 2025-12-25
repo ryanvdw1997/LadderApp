@@ -37,6 +37,8 @@ export default function ViewLadderScreen({ navigation }) {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [userSessionStatus, setUserSessionStatus] = useState({}); // sessionId -> boolean (true if user is in session)
   const [joiningSession, setJoiningSession] = useState(null);
+  const [adminIds, setAdminIds] = useState(new Set());
+  const [members, setMembers] = useState([]); // Members fetched from laddermembers
 
   useEffect(() => {
     fetchLadder();
@@ -47,6 +49,33 @@ export default function ViewLadderScreen({ navigation }) {
       fetchSessions();
     }
   }, [ladder, activeTab]);
+
+  // Fetch admin IDs
+  useEffect(() => {
+    const fetchAdminIds = async () => {
+      if (!ladderId) return;
+      
+      try {
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('isAdmin', '==', true)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        const ids = new Set();
+        membersSnapshot.forEach((doc) => {
+          ids.add(doc.data().memberId);
+        });
+        setAdminIds(ids);
+      } catch (error) {
+        console.error('Error fetching admin IDs:', error);
+      }
+    };
+    
+    if (ladderId) {
+      fetchAdminIds();
+    }
+  }, [ladderId]);
 
 
   // Refetch ladder and sessions when screen comes into focus (e.g., after creating a team, matchup, or session)
@@ -74,7 +103,20 @@ export default function ViewLadderScreen({ navigation }) {
       if (ladderDoc.exists()) {
         const data = ladderDoc.data();
         const user = auth.currentUser;
-        const isAdmin = user && data.adminList && data.adminList.includes(user.uid);
+        
+        // Query laddermembers to check if user is admin
+        let isAdmin = false;
+        if (user) {
+          const membersQuery = query(
+            collection(db, 'laddermembers'),
+            where('ladderId', '==', ladderId),
+            where('memberId', '==', user.uid),
+            where('isAdmin', '==', true)
+          );
+          const membersSnapshot = await getDocs(membersQuery);
+          isAdmin = !membersSnapshot.empty;
+        }
+        
         const ladderData = {
           id: ladderDoc.id,
           ...data,
@@ -82,32 +124,51 @@ export default function ViewLadderScreen({ navigation }) {
         };
         setLadder(ladderData);
 
-        // Fetch email addresses and phone numbers for all members
-        const memberList = data.memberList || [];
+        // Fetch members from laddermembers collection
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        
         const emailMap = {};
         const phoneMap = {};
         
         // Fetch all user data in parallel
-        const userDataPromises = memberList.map(async (member) => {
+        const userDataPromises = membersSnapshot.docs.map(async (memberDoc) => {
+          const memberData = memberDoc.data();
+          const userId = memberData.memberId;
           try {
             const q = query(
               collection(db, 'users'),
-              where('uid', '==', member.userId)
+              where('uid', '==', userId)
             );
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
               const userData = querySnapshot.docs[0].data();
-              emailMap[member.userId] = userData.email || '';
-              phoneMap[member.userId] = userData.phoneNumber || '';
+              emailMap[userId] = userData.email || '';
+              phoneMap[userId] = userData.phoneNumber || '';
             }
           } catch (error) {
-            console.error(`Error fetching user data for user ${member.userId}:`, error);
+            console.error(`Error fetching user data for user ${userId}:`, error);
           }
         });
 
         await Promise.all(userDataPromises);
         setMemberEmails(emailMap);
         setMemberPhoneNumbers(phoneMap);
+
+        // Store members list from laddermembers
+        const membersList = membersSnapshot.docs.map((memberDoc) => {
+          const memberData = memberDoc.data();
+          return {
+            userId: memberData.memberId,
+            nickname: memberData.nickname || 'Unknown',
+            points: memberData.points || 0,
+            rank: memberData.rank || 0,
+          };
+        });
+        setMembers(membersList);
       } else {
         console.error('Ladder not found');
       }
@@ -224,7 +285,7 @@ export default function ViewLadderScreen({ navigation }) {
   }
 
   // Sort members by rank (ascending, 1 is best) or by points (descending) if no rank
-  const sortedMembers = [...(ladder.memberList || [])].sort((a, b) => {
+  const sortedMembers = [...members].sort((a, b) => {
     if (a.rank !== undefined && b.rank !== undefined) {
       // If both have ranks, sort by rank (lower is better)
       return (a.rank || 999) - (b.rank || 999);
@@ -233,8 +294,9 @@ export default function ViewLadderScreen({ navigation }) {
     return (b.points || 0) - (a.points || 0);
   });
 
+  // Helper to check admin status synchronously (for rendering)
   const isAdmin = (userId) => {
-    return ladder?.adminList && ladder.adminList.includes(userId);
+    return adminIds.has(userId);
   };
 
   const handleMakeAdminClick = async (member) => {
@@ -266,26 +328,37 @@ export default function ViewLadderScreen({ navigation }) {
   };
 
   const confirmMakeAdmin = async () => {
-    if (!ladder || !memberToMakeAdmin) return;
+    if (!ladder || !memberToMakeAdmin || !ladderId) return;
 
     try {
       setSaving(true);
-      const currentAdminList = ladder.adminList || [];
 
-      // Don't add if already admin
-      if (currentAdminList.includes(memberToMakeAdmin.userId)) {
-        setShowMakeAdminModal(false);
-        setMemberToMakeAdmin(null);
-        setMemberUserData(null);
-        setSaving(false);
-        return;
+      // Check if user is already admin
+      const existingMemberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', memberToMakeAdmin.userId)
+      );
+      const existingMemberSnapshot = await getDocs(existingMemberQuery);
+
+      if (!existingMemberSnapshot.empty) {
+        // Update existing document
+        const memberDoc = existingMemberSnapshot.docs[0];
+        await updateDoc(memberDoc.ref, {
+          isAdmin: true,
+        });
+      } else {
+        // Create new member document as admin (shouldn't happen, but handle it)
+        await addDoc(collection(db, 'laddermembers'), {
+          ladderId: ladderId,
+          memberId: memberToMakeAdmin.userId,
+          isAdmin: true,
+          createdAt: serverTimestamp(),
+        });
       }
 
-      const newAdminList = [...currentAdminList, memberToMakeAdmin.userId];
-
-      await updateDoc(doc(db, 'ladders', ladderId), {
-        adminList: newAdminList,
-      });
+      // Update local admin IDs state
+      setAdminIds(prev => new Set([...prev, memberToMakeAdmin.userId]));
 
       // Update local state and refetch ladder
       await fetchLadder();
@@ -421,15 +494,21 @@ export default function ViewLadderScreen({ navigation }) {
           return;
         }
 
-        // Get user's member data from ladder
-        const memberList = ladder.memberList || [];
-        const userMemberData = memberList.find(m => m.userId === user.uid);
+        // Get user's member data from laddermembers
+        const userMemberQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('memberId', '==', user.uid)
+        );
+        const userMemberSnapshot = await getDocs(userMemberQuery);
         
-        if (!userMemberData) {
+        if (userMemberSnapshot.empty) {
           alert('You must be a member of the ladder to join a session.');
           setJoiningSession(null);
           return;
         }
+
+        const userMemberData = userMemberSnapshot.docs[0].data();
 
         // Create single-player team
         const teamMembers = [{

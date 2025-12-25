@@ -124,31 +124,28 @@ export default function CreateLadderScreen({ navigation }) {
         ? `${userFirstName} ${userLastName}`.trim()
         : (userFirstName || userLastName || 'Player');
       const finalNickname = nickname.trim() || defaultName;
-      
-      // Create member object with userId, nickname, points, and rank
-      const memberObject = {
-        userId: user.uid,
-        nickname: finalNickname,
-        points: 0,
-        rank: 0,
-      };
 
       // Create ladder document in Firestore
-      // memberList: array of objects with full member info
-      // memberIds: array of UIDs for Firestore security rules (denormalized)
-      // teamIds: array of team document IDs for teams in this ladder
-      await addDoc(collection(db, 'ladders'), {
+      const ladderDocRef = await addDoc(collection(db, 'ladders'), {
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
-        adminList: [user.uid],
-        memberList: [memberObject],
-        memberIds: [user.uid], // Denormalized array for security rules
         public: isPublic ? 1 : 0,
         joinCode: joinCode,
         matchExpirationDays: matchExpirationDays,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
+      });
+
+      // Create laddermembers document for the creator (who is an admin)
+      await addDoc(collection(db, 'laddermembers'), {
+        ladderId: ladderDocRef.id,
+        memberId: user.uid,
+        nickname: finalNickname,
+        points: 0,
+        rank: 0,
+        isAdmin: true,
+        createdAt: serverTimestamp(),
       });
 
       // Navigate back to Home screen

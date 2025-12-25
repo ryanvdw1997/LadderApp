@@ -134,7 +134,6 @@ export default function CreateSessionScreen({ navigation }) {
         expirationValue: expirationValue,
         expirationUnit: expirationUnit,
         rankingMethod: rankingMethod, // 'points' or 'winloss'
-        teamIds: [], // Array of team document IDs for teams in this session
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         status: 'upcoming', // 'upcoming', 'active', 'completed'

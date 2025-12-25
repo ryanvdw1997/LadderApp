@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, collection, addDoc, updateDoc, query, where, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, getDocs, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/CreateTeamScreen.styles';
 
@@ -68,8 +68,22 @@ export default function CreateTeamScreen({ navigation }) {
         ...ladderData,
       });
 
-      // Get member list from ladder
-      const memberList = ladderData.memberList || [];
+      // Get member list from laddermembers collection
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      const memberList = membersSnapshot.docs.map((memberDoc) => {
+        const memberData = memberDoc.data();
+        return {
+          userId: memberData.memberId,
+          nickname: memberData.nickname || 'Unknown',
+          points: memberData.points || 0,
+          rank: memberData.rank || 0,
+        };
+      });
       setAvailableMembers(memberList);
 
       // Fetch user data for all members to display names
@@ -200,14 +214,6 @@ export default function CreateTeamScreen({ navigation }) {
         rank: 0,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-      });
-
-      // Add team ID to session's teamIds array
-      const currentTeamIds = session.teamIds || [];
-      const newTeamIds = [...currentTeamIds, teamDocRef.id];
-
-      await updateDoc(doc(db, 'sessions', sessionId), {
-        teamIds: newTeamIds,
       });
 
       // Send invites to other selected players

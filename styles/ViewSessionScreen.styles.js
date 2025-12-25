@@ -156,6 +156,24 @@ export default StyleSheet.create({
   itemWrapper: {
     marginBottom: 12,
   },
+  teamCardWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  leaveTeamButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#8B8FA8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  leaveTeamButtonIcon: {
+    fontSize: 18,
+  },
   matchupCard: {
     backgroundColor: '#1A1F3A',
     borderRadius: 12,
@@ -213,6 +231,90 @@ export default StyleSheet.create({
   matchupDetailText: {
     fontSize: 14,
     color: '#8B8FA8',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#8B8FA8',
+    lineHeight: 24,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalBoldText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minWidth: 100,
+    alignItems: 'center',
+    marginLeft: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  modalCancelButton: {
+    backgroundColor: '#252A45',
+  },
+  modalCancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    backgroundColor: '#6C5CE7',
+  },
+  modalConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

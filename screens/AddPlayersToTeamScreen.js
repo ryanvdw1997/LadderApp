@@ -76,8 +76,23 @@ export default function AddPlayersToTeamScreen({ navigation }) {
         ...ladderData,
       });
 
-      // Get all ladder members
-      const memberList = ladderData.memberList || [];
+      // Get all ladder members from laddermembers collection
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      const memberList = membersSnapshot.docs.map((memberDoc) => {
+        const memberData = memberDoc.data();
+        return {
+          userId: memberData.memberId,
+          nickname: memberData.nickname || 'Unknown',
+          points: memberData.points || 0,
+          rank: memberData.rank || 0,
+        };
+      });
+      
       const teamMemberIds = teamData.memberIds || [];
 
       // Get all teams in this session to find players already on teams
