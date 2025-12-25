@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/MyLaddersScreen.styles';
 import LadderCard from '../components/LadderCard';
@@ -30,25 +30,49 @@ export default function MyLaddersScreen({ navigation }) {
         return;
       }
 
-      // Query ladders where user is a member
-      // Use memberIds array (denormalized) for efficient querying
-      // Fallback to memberList for backward compatibility with old format
-      const q = query(
-        collection(db, 'ladders'),
-        where('memberIds', 'array-contains', user.uid)
+      // Query laddermembers to find all ladders where user is a member
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('memberId', '==', user.uid)
       );
+      const membersSnapshot = await getDocs(membersQuery);
 
-      const querySnapshot = await getDocs(q);
-      const laddersList = [];
+      if (membersSnapshot.empty) {
+        setLadders([]);
+        setLoading(false);
+        return;
+      }
 
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        laddersList.push({
-          id: doc.id,
-          ...data,
-          isAdmin: data.adminList && data.adminList.includes(user.uid),
-        });
+      // Extract ladderIds and admin status
+      const ladderDataMap = {};
+      membersSnapshot.forEach((memberDoc) => {
+        const memberData = memberDoc.data();
+        ladderDataMap[memberData.ladderId] = {
+          isAdmin: memberData.isAdmin || false,
+        };
       });
+
+      // Fetch all ladders
+      const ladderIds = Object.keys(ladderDataMap);
+      const laddersList = [];
+      
+      await Promise.all(
+        ladderIds.map(async (ladderId) => {
+          try {
+            const ladderDoc = await getDoc(doc(db, 'ladders', ladderId));
+            if (ladderDoc.exists()) {
+              const data = ladderDoc.data();
+              laddersList.push({
+                id: ladderDoc.id,
+                ...data,
+                isAdmin: ladderDataMap[ladderId].isAdmin,
+              });
+            }
+          } catch (error) {
+            console.error(`Error fetching ladder ${ladderId}:`, error);
+          }
+        })
+      );
 
       // Sort by createdAt in descending order (newest first)
       laddersList.sort((a, b) => {
@@ -83,10 +107,6 @@ export default function MyLaddersScreen({ navigation }) {
   const handleDeleteLadder = (ladder) => {
     setLadderToDelete(ladder);
     setDeleteModalVisible(true);
-  };
-
-  const handleCreateTeam = (ladder) => {
-    navigation.navigate('CreateTeam', { ladderId: ladder.id });
   };
 
   const confirmDelete = async () => {
@@ -175,7 +195,6 @@ export default function MyLaddersScreen({ navigation }) {
               onView={handleViewLadder}
               onEdit={handleEditLadder}
               onDelete={handleDeleteLadder}
-              onCreateTeam={handleCreateTeam}
             />
           ))
         )}

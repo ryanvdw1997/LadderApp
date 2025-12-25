@@ -95,6 +95,9 @@ export default StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  createTeamButtonDisabled: {
+    opacity: 0.5,
+  },
   createMatchupButton: {
     backgroundColor: '#6C5CE7',
     borderRadius: 12,
@@ -114,6 +117,32 @@ export default StyleSheet.create({
     }),
   },
   createMatchupButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  createMatchupButtonDisabled: {
+    opacity: 0.5,
+  },
+  createSessionButton: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  createSessionButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
@@ -421,6 +450,74 @@ export default StyleSheet.create({
     gap: 4,
   },
   matchupDetailText: {
+    fontSize: 14,
+    color: '#8B8FA8',
+  },
+  sessionCard: {
+    backgroundColor: '#1A1F3A',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#252A45',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  sessionCardContent: {
+    activeOpacity: 0.7,
+  },
+  joinSessionButton: {
+    backgroundColor: '#6C5CE7',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6C5CE7',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  joinSessionButtonDisabled: {
+    opacity: 0.6,
+  },
+  joinSessionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sessionName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  sessionDetails: {
+    gap: 8,
+  },
+  sessionDetailText: {
     fontSize: 14,
     color: '#8B8FA8',
   },

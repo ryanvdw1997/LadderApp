@@ -49,10 +49,18 @@ export default function AddPlayersToTeamScreen({ navigation }) {
       }
 
       const teamData = teamDoc.data();
+      const sessionId = teamData.sessionId;
       setTeam({
         id: teamDoc.id,
         ...teamData,
+        sessionId: sessionId,
       });
+      
+      if (!sessionId) {
+        setError('Team session not found');
+        setLoading(false);
+        return;
+      }
 
       // Fetch ladder data
       const ladderDoc = await getDoc(doc(db, 'ladders', ladderId));
@@ -68,14 +76,29 @@ export default function AddPlayersToTeamScreen({ navigation }) {
         ...ladderData,
       });
 
-      // Get all ladder members
-      const memberList = ladderData.memberList || [];
+      // Get all ladder members from laddermembers collection
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      const memberList = membersSnapshot.docs.map((memberDoc) => {
+        const memberData = memberDoc.data();
+        return {
+          userId: memberData.memberId,
+          nickname: memberData.nickname || 'Unknown',
+          points: memberData.points || 0,
+          rank: memberData.rank || 0,
+        };
+      });
+      
       const teamMemberIds = teamData.memberIds || [];
 
-      // Get all teams in this ladder to find players already on teams
+      // Get all teams in this session to find players already on teams
       const allTeamsQuery = query(
         collection(db, 'ladderteams'),
-        where('ladderId', '==', ladderId)
+        where('sessionId', '==', sessionId)
       );
       const allTeamsSnapshot = await getDocs(allTeamsQuery);
       const playersOnTeams = new Set();
@@ -155,6 +178,14 @@ export default function AddPlayersToTeamScreen({ navigation }) {
         existingInvites.docs.map(doc => doc.data().recipientId)
       );
 
+      // Get sessionId from team
+      const sessionId = team.sessionId;
+      if (!sessionId) {
+        setError('Team session not found');
+        setSaving(false);
+        return;
+      }
+
       // Create invites for selected players
       const invitePromises = selectedPlayers
         .filter(recipientId => !existingRecipientIds.has(recipientId))
@@ -163,7 +194,8 @@ export default function AddPlayersToTeamScreen({ navigation }) {
             senderId: user.uid,
             recipientId: recipientId,
             teamId: teamId,
-            ladderId: ladderId,
+            sessionId: sessionId,
+            ladderId: ladderId, // Keep for reference
             status: 'pending',
             createdAt: serverTimestamp(),
           })

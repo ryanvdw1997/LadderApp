@@ -15,7 +15,7 @@ service cloud.firestore {
     
     // Ladderteams collection rules
     // All business logic checks are handled in application code
-    match /ladderteams/{teamId} {
+    match /sessionMembers/{sessionMemberId} {
       allow create, read, update, delete, list: if request.auth != null;
     }
     
@@ -27,6 +27,17 @@ service cloud.firestore {
     // Teaminvites collection rules
     // All business logic checks are handled in application code
     match /matchups/{matchupId} {
+      allow create, read, update, delete, list: if request.auth != null;
+    }
+    
+    // Sessions collection rules
+    // All business logic checks are handled in application code
+    match /sessions/{sessionId} {
+      allow create, read, update, delete, list: if request.auth != null;
+    }
+    // Sessions collection rules
+    // All business logic checks are handled in application code
+    match /laddermembers/{laddermemberId} {
       allow create, read, update, delete, list: if request.auth != null;
     }
   }

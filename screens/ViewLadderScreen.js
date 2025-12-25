@@ -10,11 +10,10 @@ import {
   Modal,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewLadderScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
-import TeamCard from '../components/TeamCard';
 
 export default function ViewLadderScreen({ navigation }) {
   const route = useRoute();
@@ -22,7 +21,7 @@ export default function ViewLadderScreen({ navigation }) {
   
   const [ladder, setLadder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('players'); // 'players', 'teams', or 'matches'
+  const [activeTab, setActiveTab] = useState('players'); // 'players' or 'sessions'
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [showMakeAdminModal, setShowMakeAdminModal] = useState(false);
   const [memberToMakeAdmin, setMemberToMakeAdmin] = useState(null);
@@ -30,36 +29,61 @@ export default function ViewLadderScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [memberEmails, setMemberEmails] = useState({}); // userId -> email mapping
   const [memberPhoneNumbers, setMemberPhoneNumbers] = useState({}); // userId -> phoneNumber mapping
-  const [teams, setTeams] = useState([]);
-  const [loadingTeams, setLoadingTeams] = useState(false);
-  const [showLeaveTeamModal, setShowLeaveTeamModal] = useState(false);
-  const [teamToLeave, setTeamToLeave] = useState(null);
-  const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false);
-  const [teamToDelete, setTeamToDelete] = useState(null);
-  const [matchups, setMatchups] = useState([]);
-  const [loadingMatchups, setLoadingMatchups] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [userSessionStatus, setUserSessionStatus] = useState({}); // sessionId -> boolean (true if user is in session)
+  const [joiningSession, setJoiningSession] = useState(null);
+  const [adminIds, setAdminIds] = useState(new Set());
+  const [members, setMembers] = useState([]); // Members fetched from laddermembers
 
   useEffect(() => {
     fetchLadder();
   }, [ladderId]);
 
   useEffect(() => {
-    if (ladder && activeTab === 'teams') {
-      fetchTeams();
-    }
-    if (ladder && activeTab === 'matches') {
-      fetchMatchups();
+    if (ladder && activeTab === 'sessions') {
+      fetchSessions();
     }
   }, [ladder, activeTab]);
 
-  // Refetch ladder when screen comes into focus (e.g., after creating a team or matchup)
-  // The useEffect watching ladder and activeTab will automatically fetch teams/matchups if needed
+  // Fetch admin IDs
+  useEffect(() => {
+    const fetchAdminIds = async () => {
+      if (!ladderId) return;
+      
+      try {
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('isAdmin', '==', true)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        const ids = new Set();
+        membersSnapshot.forEach((doc) => {
+          ids.add(doc.data().memberId);
+        });
+        setAdminIds(ids);
+      } catch (error) {
+        console.error('Error fetching admin IDs:', error);
+      }
+    };
+    
+    if (ladderId) {
+      fetchAdminIds();
+    }
+  }, [ladderId]);
+
+
+  // Refetch ladder and sessions when screen comes into focus (e.g., after creating a team, matchup, or session)
   useFocusEffect(
     useCallback(() => {
       if (ladderId) {
         fetchLadder();
+        if (activeTab === 'sessions') {
+          fetchSessions();
+        }
       }
-    }, [ladderId])
+    }, [ladderId, activeTab])
   );
 
   const fetchLadder = async () => {
@@ -75,7 +99,20 @@ export default function ViewLadderScreen({ navigation }) {
       if (ladderDoc.exists()) {
         const data = ladderDoc.data();
         const user = auth.currentUser;
-        const isAdmin = user && data.adminList && data.adminList.includes(user.uid);
+        
+        // Query laddermembers to check if user is admin
+        let isAdmin = false;
+        if (user) {
+          const membersQuery = query(
+            collection(db, 'laddermembers'),
+            where('ladderId', '==', ladderId),
+            where('memberId', '==', user.uid),
+            where('isAdmin', '==', true)
+          );
+          const membersSnapshot = await getDocs(membersQuery);
+          isAdmin = !membersSnapshot.empty;
+        }
+        
         const ladderData = {
           id: ladderDoc.id,
           ...data,
@@ -83,32 +120,51 @@ export default function ViewLadderScreen({ navigation }) {
         };
         setLadder(ladderData);
 
-        // Fetch email addresses and phone numbers for all members
-        const memberList = data.memberList || [];
+        // Fetch members from laddermembers collection
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        
         const emailMap = {};
         const phoneMap = {};
         
         // Fetch all user data in parallel
-        const userDataPromises = memberList.map(async (member) => {
+        const userDataPromises = membersSnapshot.docs.map(async (memberDoc) => {
+          const memberData = memberDoc.data();
+          const userId = memberData.memberId;
           try {
             const q = query(
               collection(db, 'users'),
-              where('uid', '==', member.userId)
+              where('uid', '==', userId)
             );
             const querySnapshot = await getDocs(q);
             if (!querySnapshot.empty) {
               const userData = querySnapshot.docs[0].data();
-              emailMap[member.userId] = userData.email || '';
-              phoneMap[member.userId] = userData.phoneNumber || '';
+              emailMap[userId] = userData.email || '';
+              phoneMap[userId] = userData.phoneNumber || '';
             }
           } catch (error) {
-            console.error(`Error fetching user data for user ${member.userId}:`, error);
+            console.error(`Error fetching user data for user ${userId}:`, error);
           }
         });
 
         await Promise.all(userDataPromises);
         setMemberEmails(emailMap);
         setMemberPhoneNumbers(phoneMap);
+
+        // Store members list from laddermembers
+        const membersList = membersSnapshot.docs.map((memberDoc) => {
+          const memberData = memberDoc.data();
+          return {
+            userId: memberData.memberId,
+            nickname: memberData.nickname || 'Unknown',
+            points: memberData.points || 0,
+            rank: memberData.rank || 0,
+          };
+        });
+        setMembers(membersList);
       } else {
         console.error('Ladder not found');
       }
@@ -119,80 +175,84 @@ export default function ViewLadderScreen({ navigation }) {
     }
   };
 
-  const fetchTeams = async () => {
-    if (!ladder || !ladder.teamIds || ladder.teamIds.length === 0) {
-      setTeams([]);
-      return;
-    }
-
-    try {
-      setLoadingTeams(true);
-      const teamDocs = await Promise.all(
-        ladder.teamIds.map(teamId => getDoc(doc(db, 'ladderteams', teamId)))
-      );
-
-      const teamsList = teamDocs
-        .filter(doc => doc.exists())
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          ladderId: ladderId, // Ensure ladderId is included
-        }));
-
-      // Sort teams by rank (ascending, 1 is best) or by points (descending) if no rank
-      teamsList.sort((a, b) => {
-        if (a.rank !== undefined && b.rank !== undefined) {
-          return (a.rank || 999) - (b.rank || 999);
-        }
-        return (b.points || 0) - (a.points || 0);
-      });
-
-      setTeams(teamsList);
-    } catch (error) {
-      console.error('Error fetching teams:', error);
-      setTeams([]);
-    } finally {
-      setLoadingTeams(false);
-    }
-  };
-
-  const fetchMatchups = async () => {
+  const fetchSessions = async () => {
     if (!ladder || !ladderId) {
-      setMatchups([]);
+      setSessions([]);
       return;
     }
 
     try {
-      setLoadingMatchups(true);
-      const matchupsQuery = query(
-        collection(db, 'matchups'),
+      setLoadingSessions(true);
+      const sessionsQuery = query(
+        collection(db, 'sessions'),
         where('ladderId', '==', ladderId)
       );
-      const matchupsSnapshot = await getDocs(matchupsQuery);
+      const sessionsSnapshot = await getDocs(sessionsQuery);
       
-      const matchupsList = matchupsSnapshot.docs.map(doc => ({
+      const sessionsList = sessionsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
       }));
 
-      // Sort by createdAt (newest first)
-      matchupsList.sort((a, b) => {
-        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+      // Sort by startDate (newest first)
+      sessionsList.sort((a, b) => {
+        const aDate = a.startDate?.toDate ? a.startDate.toDate() : new Date(0);
+        const bDate = b.startDate?.toDate ? b.startDate.toDate() : new Date(0);
         return bDate - aDate;
       });
 
-      setMatchups(matchupsList);
+      setSessions(sessionsList);
+
+      // Check if user is already in each session
+      const user = auth.currentUser;
+      if (user) {
+        const statusMap = {};
+        await Promise.all(sessionsList.map(async (session) => {
+          try {
+            const membersQuery = query(
+              collection(db, 'sessionMembers'),
+              where('sessionId', '==', session.id),
+              where('userId', '==', user.uid)
+            );
+            const membersSnapshot = await getDocs(membersQuery);
+            statusMap[session.id] = !membersSnapshot.empty;
+          } catch (error) {
+            console.error(`Error checking session status for ${session.id}:`, error);
+            statusMap[session.id] = false;
+          }
+        }));
+        setUserSessionStatus(statusMap);
+      }
     } catch (error) {
-      console.error('Error fetching matchups:', error);
-      setMatchups([]);
+      console.error('Error fetching sessions:', error);
+      setSessions([]);
     } finally {
-      setLoadingMatchups(false);
+      setLoadingSessions(false);
     }
   };
 
+  // Helper to get active or most recent session
+  const getActiveSession = () => {
+    if (!sessions || sessions.length === 0) return null;
+    
+    const now = new Date();
+    // First try to find active session
+    const activeSession = sessions.find(session => {
+      const startDate = session.startDate?.toDate ? session.startDate.toDate() : null;
+      const endDate = session.endDate?.toDate ? session.endDate.toDate() : null;
+      if (startDate && endDate) {
+        return now >= startDate && now <= endDate;
+      }
+      return false;
+    });
+    
+    if (activeSession) return activeSession;
+    
+    // Otherwise return most recent session
+    return sessions[0];
+  };
+
   const isSingles = ladder?.teamType === 'singles';
-  const showTeamsTab = !isSingles; // Show teams tab only for doubles/teams ladders
 
   if (loading) {
     return (
@@ -221,7 +281,7 @@ export default function ViewLadderScreen({ navigation }) {
   }
 
   // Sort members by rank (ascending, 1 is best) or by points (descending) if no rank
-  const sortedMembers = [...(ladder.memberList || [])].sort((a, b) => {
+  const sortedMembers = [...members].sort((a, b) => {
     if (a.rank !== undefined && b.rank !== undefined) {
       // If both have ranks, sort by rank (lower is better)
       return (a.rank || 999) - (b.rank || 999);
@@ -230,8 +290,9 @@ export default function ViewLadderScreen({ navigation }) {
     return (b.points || 0) - (a.points || 0);
   });
 
+  // Helper to check admin status synchronously (for rendering)
   const isAdmin = (userId) => {
-    return ladder?.adminList && ladder.adminList.includes(userId);
+    return adminIds.has(userId);
   };
 
   const handleMakeAdminClick = async (member) => {
@@ -263,26 +324,37 @@ export default function ViewLadderScreen({ navigation }) {
   };
 
   const confirmMakeAdmin = async () => {
-    if (!ladder || !memberToMakeAdmin) return;
+    if (!ladder || !memberToMakeAdmin || !ladderId) return;
 
     try {
       setSaving(true);
-      const currentAdminList = ladder.adminList || [];
 
-      // Don't add if already admin
-      if (currentAdminList.includes(memberToMakeAdmin.userId)) {
-        setShowMakeAdminModal(false);
-        setMemberToMakeAdmin(null);
-        setMemberUserData(null);
-        setSaving(false);
-        return;
+      // Check if user is already admin
+      const existingMemberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', memberToMakeAdmin.userId)
+      );
+      const existingMemberSnapshot = await getDocs(existingMemberQuery);
+
+      if (!existingMemberSnapshot.empty) {
+        // Update existing document
+        const memberDoc = existingMemberSnapshot.docs[0];
+        await updateDoc(memberDoc.ref, {
+          isAdmin: true,
+        });
+      } else {
+        // Create new member document as admin (shouldn't happen, but handle it)
+        await addDoc(collection(db, 'laddermembers'), {
+          ladderId: ladderId,
+          memberId: memberToMakeAdmin.userId,
+          isAdmin: true,
+          createdAt: serverTimestamp(),
+        });
       }
 
-      const newAdminList = [...currentAdminList, memberToMakeAdmin.userId];
-
-      await updateDoc(doc(db, 'ladders', ladderId), {
-        adminList: newAdminList,
-      });
+      // Update local admin IDs state
+      setAdminIds(prev => new Set([...prev, memberToMakeAdmin.userId]));
 
       // Update local state and refetch ladder
       await fetchLadder();
@@ -306,114 +378,59 @@ export default function ViewLadderScreen({ navigation }) {
     setExpandedPlayer(null);
   };
 
-  const handleLeaveTeam = (team) => {
-    setTeamToLeave(team);
-    setShowLeaveTeamModal(true);
-  };
-
-  const confirmLeaveTeam = async () => {
-    if (!teamToLeave) return;
-
+  const handleJoinSession = async (session) => {
     const user = auth.currentUser;
     if (!user) return;
 
+    // For all ladders, join session creates a sessionMembers document
     try {
-      setSaving(true);
-
-      // Get current team data
-      const teamDoc = await getDoc(doc(db, 'ladderteams', teamToLeave.id));
-      if (!teamDoc.exists()) {
-        alert('Team not found');
-        setShowLeaveTeamModal(false);
-        setTeamToLeave(null);
-        setSaving(false);
-        return;
-      }
-
-      const teamData = teamDoc.data();
-      const currentMembers = teamData.members || [];
-      const currentMemberIds = teamData.memberIds || [];
-
-      // Remove user from members and memberIds
-      const newMembers = currentMembers.filter(m => m.userId !== user.uid);
-      const newMemberIds = currentMemberIds.filter(id => id !== user.uid);
-
-      await updateDoc(doc(db, 'ladderteams', teamToLeave.id), {
-        members: newMembers,
-        memberIds: newMemberIds,
-      });
-
-      // Close modal and refresh teams list
-      setShowLeaveTeamModal(false);
-      setTeamToLeave(null);
-      await fetchTeams();
-      await fetchLadder(); // Refresh ladder to update teamIds if needed
-    } catch (error) {
-      console.error('Error leaving team:', error);
-      alert('Failed to leave team. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelLeaveTeam = () => {
-    setShowLeaveTeamModal(false);
-    setTeamToLeave(null);
-  };
-
-  const handleDeleteTeam = (team) => {
-    setTeamToDelete(team);
-    setShowDeleteTeamModal(true);
-  };
-
-  const confirmDeleteTeam = async () => {
-    if (!teamToDelete) return;
-
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setSaving(true);
-
-      // Delete the team document
-      await deleteDoc(doc(db, 'ladderteams', teamToDelete.id));
-
-      // Remove team ID from ladder's teamIds array
-      if (teamToDelete.ladderId || ladderId) {
-        try {
-          const ladderDocRef = doc(db, 'ladders', teamToDelete.ladderId || ladderId);
-          const ladderDoc = await getDoc(ladderDocRef);
-          if (ladderDoc.exists()) {
-            const ladderData = ladderDoc.data();
-            const currentTeamIds = ladderData.teamIds || [];
-            const newTeamIds = currentTeamIds.filter(id => id !== teamToDelete.id);
-
-            await updateDoc(ladderDocRef, {
-              teamIds: newTeamIds,
-            });
-          }
-        } catch (error) {
-          console.error('Error updating ladder teamIds:', error);
-          // Continue even if this fails - team is already deleted
+        setJoiningSession(session.id);
+        
+        // Check if user is already in this session
+        const existingMemberQuery = query(
+          collection(db, 'sessionMembers'),
+          where('sessionId', '==', session.id),
+          where('userId', '==', user.uid)
+        );
+        const existingMemberSnapshot = await getDocs(existingMemberQuery);
+        
+        if (!existingMemberSnapshot.empty) {
+          alert('You are already in this session.');
+          setJoiningSession(null);
+          return;
         }
+
+        // Get user's member data from laddermembers to verify they're a ladder member
+        const userMemberQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('memberId', '==', user.uid)
+        );
+        const userMemberSnapshot = await getDocs(userMemberQuery);
+        
+        if (userMemberSnapshot.empty) {
+          alert('You must be a member of the ladder to join a session.');
+          setJoiningSession(null);
+          return;
+        }
+
+        // Create sessionMembers document
+        await addDoc(collection(db, 'sessionMembers'), {
+          sessionId: session.id,
+          ladderId: ladderId,
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+        });
+
+        // Update user session status
+        setUserSessionStatus(prev => ({ ...prev, [session.id]: true }));
+        alert('Successfully joined session!');
+      } catch (error) {
+        console.error('Error joining session:', error);
+        alert('Failed to join session. Please try again.');
+      } finally {
+        setJoiningSession(null);
       }
-
-      // Close modal and refresh teams list
-      setShowDeleteTeamModal(false);
-      setTeamToDelete(null);
-      await fetchLadder(); // Refresh ladder to get updated teamIds
-      await fetchTeams(); // Refresh teams list
-    } catch (error) {
-      console.error('Error deleting team:', error);
-      alert('Failed to delete team. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelDeleteTeam = () => {
-    setShowDeleteTeamModal(false);
-    setTeamToDelete(null);
   };
 
   const renderPlayersList = () => {
@@ -480,8 +497,8 @@ export default function ViewLadderScreen({ navigation }) {
     );
   };
 
-  const renderTeamsList = () => {
-    if (loadingTeams) {
+  const renderSessionsList = () => {
+    if (loadingSessions) {
       return (
         <View style={styles.emptyState}>
           <ActivityIndicator size="large" color="#6C5CE7" />
@@ -489,12 +506,12 @@ export default function ViewLadderScreen({ navigation }) {
       );
     }
 
-    if (teams.length === 0) {
+    if (sessions.length === 0) {
       return (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No teams yet</Text>
+          <Text style={styles.emptyStateText}>No sessions yet</Text>
           <Text style={styles.emptyStateSubtext}>
-            Create a team to get started!
+            Create a session to organize matchups by time period
           </Text>
         </View>
       );
@@ -503,131 +520,89 @@ export default function ViewLadderScreen({ navigation }) {
     const user = auth.currentUser;
 
     return (
-      <View style={styles.listContainer}>
-        {teams.map((team, index) => {
-          const isCreator = user && team.createdBy === user.uid;
-          const isMember = user && team.memberIds && team.memberIds.includes(user.uid);
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        {sessions.map((session) => {
+          const startDate = session.startDate?.toDate ? session.startDate.toDate() : null;
+          const endDate = session.endDate?.toDate ? session.endDate.toDate() : null;
+          const now = new Date();
+          
+          // Determine status
+          let status = 'upcoming';
+          let statusColor = '#FFA726'; // orange for upcoming
+          if (startDate && endDate) {
+            if (now < startDate) {
+              status = 'upcoming';
+              statusColor = '#FFA726';
+            } else if (now >= startDate && now <= endDate) {
+              status = 'active';
+              statusColor = '#66BB6A'; // green for active
+            } else {
+              status = 'completed';
+              statusColor = '#8B8FA8'; // gray for completed
+            }
+          }
+
+          // Format dates
+          const startDateStr = startDate 
+            ? startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : 'Unknown';
+          const endDateStr = endDate 
+            ? endDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            : 'Unknown';
+
+          // Format expiration
+          const expirationStr = session.expirationUnit === 'weeks'
+            ? `${session.expirationValue} ${session.expirationValue === 1 ? 'week' : 'weeks'}`
+            : `${session.expirationValue} ${session.expirationValue === 1 ? 'day' : 'days'}`;
+
+          // Ranking method display
+          const rankingMethodStr = session.rankingMethod === 'points' ? 'Points Based' : 'Win/Loss Based';
+          
+          // Check if user is already in this session
+          const isUserInSession = userSessionStatus[session.id] || false;
+          const isJoining = joiningSession === session.id;
 
           return (
-            <View key={team.id || index} style={styles.teamCardWrapper}>
-              <View style={{ flex: 1 }}>
-                <TeamCard team={team} index={index} />
-              </View>
-              {isMember && (
-                <View style={styles.teamActionButtons}>
-                  {isCreator ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.addPlayerButton}
-                        onPress={() => navigation.navigate('AddPlayersToTeam', { teamId: team.id, ladderId: team.ladderId || ladderId })}
-                        disabled={saving}
-                        accessibilityLabel="Add Players"
-                        accessibilityHint="Tap to add players to this team"
-                      >
-                        <Text style={styles.addPlayerButtonIcon}>➕</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteTeamButton}
-                        onPress={() => handleDeleteTeam(team)}
-                        disabled={saving}
-                      >
-                        <Text style={styles.deleteTeamButtonIcon}>🗑️</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.leaveTeamButton}
-                      onPress={() => handleLeaveTeam(team)}
-                      disabled={saving}
-                      accessibilityLabel="Leave Team"
-                      accessibilityHint="Tap to leave this team"
-                    >
-                      <Text style={styles.leaveTeamButtonIcon}>👋</Text>
-                    </TouchableOpacity>
-                  )}
+            <View key={session.id} style={styles.sessionCard}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ViewSession', { sessionId: session.id, ladderId: ladderId })}
+                style={styles.sessionCardContent}
+              >
+                <View style={styles.sessionHeader}>
+                  <Text style={styles.sessionName}>{session.name || 'Untitled Session'}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                    <Text style={styles.statusBadgeText}>
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Text>
+                  </View>
                 </View>
+                <View style={styles.sessionDetails}>
+                  <Text style={styles.sessionDetailText}>
+                    📅 {startDateStr} - {endDateStr}
+                  </Text>
+                  <Text style={styles.sessionDetailText}>
+                    ⏱️ Matchup expiration: {expirationStr}
+                  </Text>
+                  <Text style={styles.sessionDetailText}>
+                    📊 Ranking: {rankingMethodStr}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              {!isUserInSession && (
+                <TouchableOpacity
+                  style={[styles.joinSessionButton, isJoining && styles.joinSessionButtonDisabled]}
+                  onPress={() => handleJoinSession(session)}
+                  disabled={isJoining}
+                >
+                  <Text style={styles.joinSessionButtonText}>
+                    {isJoining ? 'Joining...' : 'Join Session'}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
           );
         })}
-      </View>
-    );
-  };
-
-  const renderMatchesList = () => {
-    if (loadingMatchups) {
-      return (
-        <View style={styles.emptyState}>
-          <ActivityIndicator size="large" color="#6C5CE7" />
-        </View>
-      );
-    }
-
-    if (matchups.length === 0) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No matchups yet</Text>
-          {ladder.isAdmin && (
-            <Text style={styles.emptyStateSubtext}>
-              Create a matchup to get started
-            </Text>
-          )}
-        </View>
-      );
-    }
-
-    const isSingles = ladder?.teamType === 'singles';
-
-    return (
-      <View style={styles.listContainer}>
-        {matchups.map((matchup) => {
-          const createdAt = matchup.createdAt?.toDate ? matchup.createdAt.toDate() : null;
-          const expiresAt = matchup.expiresAt?.toDate ? matchup.expiresAt.toDate() : null;
-          const now = new Date();
-          const isExpired = expiresAt && expiresAt < now;
-          const status = matchup.status || 'pending';
-
-          // Format dates
-          const createdDateStr = createdAt 
-            ? createdAt.toLocaleDateString() 
-            : 'Unknown date';
-          const expiresDateStr = expiresAt 
-            ? expiresAt.toLocaleDateString() 
-            : 'Unknown';
-
-          // Get names
-          const name1 = isSingles ? matchup.player1Name : matchup.team1Name;
-          const name2 = isSingles ? matchup.player2Name : matchup.team2Name;
-
-          return (
-            <View key={matchup.id} style={styles.matchupCard}>
-              <View style={styles.matchupHeader}>
-                <Text style={styles.matchupNames}>
-                  {name1 || 'Unknown'} vs {name2 || 'Unknown'}
-                </Text>
-                <View style={[
-                  styles.statusBadge,
-                  status === 'completed' && styles.statusBadgeCompleted,
-                  status === 'pending' && !isExpired && styles.statusBadgePending,
-                  isExpired && styles.statusBadgeExpired,
-                ]}>
-                  <Text style={styles.statusBadgeText}>
-                    {isExpired ? 'Expired' : status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.matchupDetails}>
-                <Text style={styles.matchupDetailText}>
-                  Created: {createdDateStr}
-                </Text>
-                <Text style={styles.matchupDetailText}>
-                  Expires: {expiresDateStr}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
+      </ScrollView>
     );
   };
 
@@ -644,24 +619,14 @@ export default function ViewLadderScreen({ navigation }) {
         </View>
         <View style={styles.headerTitleRow}>
           <Text style={styles.title}>{ladder.name}</Text>
-          <View style={styles.headerButtons}>
-            {showTeamsTab && (
-              <TouchableOpacity
-                style={styles.createTeamButton}
-                onPress={() => navigation.navigate('CreateTeam', { ladderId: ladderId })}
-              >
-                <Text style={styles.createTeamButtonText}>Create Team</Text>
-              </TouchableOpacity>
-            )}
-            {ladder.isAdmin && activeTab === 'matches' && (
-              <TouchableOpacity
-                style={styles.createMatchupButton}
-                onPress={() => navigation.navigate('CreateMatchup', { ladderId: ladderId })}
-              >
-                <Text style={styles.createMatchupButtonText}>Create Matchup</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {ladder.isAdmin && activeTab === 'sessions' && (
+            <TouchableOpacity
+              style={styles.createSessionButton}
+              onPress={() => navigation.navigate('CreateSession', { ladderId: ladderId })}
+            >
+              <Text style={styles.createSessionButtonText}>Create Session</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -674,35 +639,26 @@ export default function ViewLadderScreen({ navigation }) {
             Players
           </Text>
         </TouchableOpacity>
-        {showTeamsTab && (
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'teams' && styles.activeTab]}
-            onPress={() => setActiveTab('teams')}
-          >
-            <Text style={[styles.tabText, activeTab === 'teams' && styles.activeTabText]}>
-              Teams
-            </Text>
-          </TouchableOpacity>
-        )}
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'matches' && styles.activeTab]}
-          onPress={() => setActiveTab('matches')}
+          style={[styles.tab, activeTab === 'sessions' && styles.activeTab]}
+          onPress={() => setActiveTab('sessions')}
         >
-          <Text style={[styles.tabText, activeTab === 'matches' && styles.activeTabText]}>
-            Matches
+          <Text style={[styles.tabText, activeTab === 'sessions' && styles.activeTabText]}>
+            Sessions
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {activeTab === 'players' && renderPlayersList()}
-        {activeTab === 'teams' && renderTeamsList()}
-        {activeTab === 'matches' && renderMatchesList()}
-      </ScrollView>
+      {activeTab === 'players' && (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderPlayersList()}
+        </ScrollView>
+      )}
+      {activeTab === 'sessions' && renderSessionsList()}
 
       {/* Make Admin Confirmation Modal */}
       <Modal
@@ -747,79 +703,6 @@ export default function ViewLadderScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Leave Team Confirmation Modal */}
-      <Modal
-        visible={showLeaveTeamModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelLeaveTeam}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Leave Team</Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to leave <Text style={styles.modalBoldText}>{teamToLeave?.name}</Text>?
-            </Text>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={cancelLeaveTeam}
-                disabled={saving}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirmButton]}
-                onPress={confirmLeaveTeam}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalConfirmButtonText}>Confirm</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Delete Team Confirmation Modal */}
-      <Modal
-        visible={showDeleteTeamModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelDeleteTeam}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Delete Team</Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to delete <Text style={styles.modalBoldText}>{teamToDelete?.name}</Text>? This action cannot be undone.
-            </Text>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={cancelDeleteTeam}
-                disabled={saving}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalDeleteButton]}
-                onPress={confirmDeleteTeam}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalDeleteButtonText}>Delete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }

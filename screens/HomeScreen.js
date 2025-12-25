@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase.config';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import styles from '../styles/HomeScreen.styles';
 
 export default function HomeScreen({ navigation }) {
@@ -102,8 +102,15 @@ export default function HomeScreen({ navigation }) {
         return;
       }
 
-      // Check if user is already a member
-      if (ladderData.memberIds && ladderData.memberIds.includes(user.uid)) {
+      // Check if user is already a member by querying laddermembers
+      const membersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderDoc.id),
+        where('memberId', '==', user.uid)
+      );
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      if (!membersSnapshot.empty) {
         setError('You are already a member of this ladder');
         setLoading(false);
         return;
@@ -137,26 +144,15 @@ export default function HomeScreen({ navigation }) {
         : (userFirstName || userLastName || 'Player');
       const finalNickname = nickname.trim() || defaultName;
 
-      // Create member object
-      const memberObject = {
-        userId: user.uid,
+      // Create laddermembers document (non-admin by default)
+      await addDoc(collection(db, 'laddermembers'), {
+        ladderId: ladderToJoin.id,
+        memberId: user.uid,
         nickname: finalNickname,
         points: 0,
         rank: 0,
-      };
-
-      // Get current member data
-      const currentMemberList = ladderToJoin.memberList || [];
-      const currentMemberIds = ladderToJoin.memberIds || [];
-
-      // Add new member
-      const newMemberList = [...currentMemberList, memberObject];
-      const newMemberIds = [...currentMemberIds, user.uid];
-
-      // Update ladder in Firestore
-      await updateDoc(doc(db, 'ladders', ladderToJoin.id), {
-        memberList: newMemberList,
-        memberIds: newMemberIds,
+        isAdmin: false,
+        createdAt: serverTimestamp(),
       });
 
       // Close modals and reset

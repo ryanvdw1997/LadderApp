@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/EditLadderScreen.styles';
 
@@ -21,6 +21,7 @@ export default function EditLadderScreen({ navigation }) {
   
   const [ladder, setLadder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ladderMembers, setLadderMembers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis');
@@ -49,11 +50,46 @@ export default function EditLadderScreen({ navigation }) {
       const ladderDoc = await getDoc(doc(db, 'ladders', ladderId));
       if (ladderDoc.exists()) {
         const data = ladderDoc.data();
+        const user = auth.currentUser;
+        
+        // Query laddermembers to check if user is admin and fetch members
+        let isAdmin = false;
+        const members = [];
+        
+        if (user) {
+          const adminQuery = query(
+            collection(db, 'laddermembers'),
+            where('ladderId', '==', ladderId),
+            where('memberId', '==', user.uid),
+            where('isAdmin', '==', true)
+          );
+          const adminSnapshot = await getDocs(adminQuery);
+          isAdmin = !adminSnapshot.empty;
+        }
+        
+        // Fetch all members
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        membersSnapshot.forEach((memberDoc) => {
+          const memberData = memberDoc.data();
+          members.push({
+            userId: memberData.memberId,
+            nickname: memberData.nickname || 'Unknown',
+            points: memberData.points || 0,
+            rank: memberData.rank || 0,
+          });
+        });
+        
         const ladderData = {
           id: ladderDoc.id,
           ...data,
+          isAdmin,
         };
         setLadder(ladderData);
+        setLadderMembers(members);
         setLadderName(data.name || '');
         setGameType(data.type || 'tennis');
         setTeamType(data.teamType || 'singles');
@@ -116,29 +152,51 @@ export default function EditLadderScreen({ navigation }) {
   };
 
   const handleMakeAdmin = async (member) => {
-    if (!ladder || !member) return;
+    if (!ladder || !member || !ladderId) return;
 
     try {
       setSaving(true);
-      const currentAdminList = ladder.adminList || [];
-      
-      // Don't add if already admin
-      if (currentAdminList.includes(member.userId)) {
+
+      // Check if user is already admin
+      const existingMemberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', member.userId),
+        where('isAdmin', '==', true)
+      );
+      const existingMemberSnapshot = await getDocs(existingMemberQuery);
+
+      if (!existingMemberSnapshot.empty) {
         setSaving(false);
-        return;
+        return; // Already admin
       }
 
-      const newAdminList = [...currentAdminList, member.userId];
-      
-      await updateDoc(doc(db, 'ladders', ladderId), {
-        adminList: newAdminList,
-      });
+      // Find or create laddermembers document
+      const memberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', member.userId)
+      );
+      const memberSnapshot = await getDocs(memberQuery);
 
-      // Update local state
-      setLadder({
-        ...ladder,
-        adminList: newAdminList,
-      });
+      if (!memberSnapshot.empty) {
+        // Update existing document
+        const memberDoc = memberSnapshot.docs[0];
+        await updateDoc(memberDoc.ref, {
+          isAdmin: true,
+        });
+      } else {
+        // Create new member document as admin (shouldn't happen, but handle it)
+        await addDoc(collection(db, 'laddermembers'), {
+          ladderId: ladderId,
+          memberId: member.userId,
+          isAdmin: true,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // Refetch ladder to update UI
+      await fetchLadder();
       
       setExpandedPlayer(null);
     } catch (error) {
@@ -164,42 +222,26 @@ export default function EditLadderScreen({ navigation }) {
   };
 
   const confirmRemoveMember = async () => {
-    if (!ladder || !memberToRemove) return;
+    if (!ladder || !memberToRemove || !ladderId) return;
 
     try {
       setSaving(true);
-      const currentMemberList = ladder.memberList || [];
-      const currentMemberIds = ladder.memberIds || [];
-      const currentAdminList = ladder.adminList || [];
 
-      // Remove from memberList
-      const newMemberList = currentMemberList.filter(
-        (m) => m.userId !== memberToRemove.userId
+      // Delete laddermembers document
+      const memberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', memberToRemove.userId)
       );
+      const memberSnapshot = await getDocs(memberQuery);
+      
+      if (!memberSnapshot.empty) {
+        const memberDoc = memberSnapshot.docs[0];
+        await deleteDoc(memberDoc.ref);
+      }
 
-      // Remove from memberIds
-      const newMemberIds = currentMemberIds.filter(
-        (id) => id !== memberToRemove.userId
-      );
-
-      // Remove from adminList if they were an admin
-      const newAdminList = currentAdminList.filter(
-        (id) => id !== memberToRemove.userId
-      );
-
-      await updateDoc(doc(db, 'ladders', ladderId), {
-        memberList: newMemberList,
-        memberIds: newMemberIds,
-        adminList: newAdminList,
-      });
-
-      // Update local state
-      setLadder({
-        ...ladder,
-        memberList: newMemberList,
-        memberIds: newMemberIds,
-        adminList: newAdminList,
-      });
+      // Refetch ladder to update UI
+      await fetchLadder();
 
       setExpandedPlayer(null);
       setShowRemoveModal(false);
@@ -243,14 +285,41 @@ export default function EditLadderScreen({ navigation }) {
     );
   }
 
+  // Fetch admin IDs for checking admin status
+  const [adminIds, setAdminIds] = useState(new Set());
+  
+  useEffect(() => {
+    const fetchAdminIds = async () => {
+      if (!ladderId) return;
+      
+      try {
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('isAdmin', '==', true)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        const ids = new Set();
+        membersSnapshot.forEach((doc) => {
+          ids.add(doc.data().memberId);
+        });
+        setAdminIds(ids);
+      } catch (error) {
+        console.error('Error fetching admin IDs:', error);
+      }
+    };
+    
+    if (ladderId) {
+      fetchAdminIds();
+    }
+  }, [ladderId]);
+
   const isAdmin = (userId) => {
-    return ladder.adminList && ladder.adminList.includes(userId);
+    return adminIds.has(userId);
   };
 
   const renderPlayersTab = () => {
-    const members = ladder.memberList || [];
-
-    if (members.length === 0) {
+    if (ladderMembers.length === 0) {
       return (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>No players yet</Text>
@@ -260,7 +329,7 @@ export default function EditLadderScreen({ navigation }) {
 
     return (
       <View style={styles.listContainer}>
-        {members.map((member, index) => (
+        {ladderMembers.map((member, index) => (
           <View key={member.userId || index} style={styles.playerCard}>
             <TouchableOpacity
               style={styles.playerCardHeader}
