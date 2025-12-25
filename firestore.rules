@@ -15,7 +15,7 @@ service cloud.firestore {
     
     // Ladderteams collection rules
     // All business logic checks are handled in application code
-    match /ladderteams/{teamId} {
+    match /sessionMembers/{sessionMemberId} {
       allow create, read, update, delete, list: if request.auth != null;
     }
     

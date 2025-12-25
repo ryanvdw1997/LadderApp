@@ -19,11 +19,8 @@ export default function CreateMatchupScreen({ navigation }) {
   const [session, setSession] = useState(null);
   const [ladder, setLadder] = useState(null);
   const [availablePlayers, setAvailablePlayers] = useState([]);
-  const [availableTeams, setAvailableTeams] = useState([]);
   const [selectedPlayer1, setSelectedPlayer1] = useState(null);
   const [selectedPlayer2, setSelectedPlayer2] = useState(null);
-  const [selectedTeam1, setSelectedTeam1] = useState(null);
-  const [selectedTeam2, setSelectedTeam2] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -68,37 +65,48 @@ export default function CreateMatchupScreen({ navigation }) {
         ...ladderData,
       });
 
-      const isSingles = ladderData.teamType === 'singles';
-
-      // Query teams from the session (teams are now stored with sessionId)
-      const teamsQuery = query(
-        collection(db, 'ladderteams'),
+      // Query session members
+      const membersQuery = query(
+        collection(db, 'sessionMembers'),
         where('sessionId', '==', sessionId)
       );
-      const teamsSnapshot = await getDocs(teamsQuery);
-      const teamsList = teamsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      // Fetch member details from laddermembers to get nickname, points, rank
+      const memberDetailsPromises = membersSnapshot.docs.map(async (memberDoc) => {
+        const memberData = memberDoc.data();
+        const userId = memberData.userId;
+        
+        // Get member details from laddermembers
+        const ladderMemberQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('memberId', '==', userId)
+        );
+        const ladderMemberSnapshot = await getDocs(ladderMemberQuery);
+        
+        if (!ladderMemberSnapshot.empty) {
+          const ladderMemberData = ladderMemberSnapshot.docs[0].data();
+          return {
+            userId: userId,
+            nickname: ladderMemberData.nickname || 'Unknown',
+            points: ladderMemberData.points || 0,
+            rank: ladderMemberData.rank || 0,
+          };
+        }
+        
+        return {
+          userId: userId,
+          nickname: 'Unknown',
+          points: 0,
+          rank: 0,
+        };
+      });
 
-      if (isSingles) {
-        // For singles, extract player info from single-player teams
-        const playersList = teamsList
-          .map(team => {
-            const member = team.members && team.members[0];
-            return member ? {
-              userId: member.userId,
-              nickname: member.nickname || 'Unknown',
-              points: team.points || 0,
-              rank: team.rank,
-            } : null;
-          })
-          .filter(p => p !== null);
-        setAvailablePlayers(playersList);
-      } else {
-        // For doubles/teams, use the teams directly
-        setAvailableTeams(teamsList);
-      }
+      const playersList = await Promise.all(memberDetailsPromises);
+      
+      // For both singles and doubles/teams, we show individual players now
+      setAvailablePlayers(playersList);
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Failed to load data');
@@ -120,27 +128,14 @@ export default function CreateMatchupScreen({ navigation }) {
         return;
       }
 
-    const isSingles = ladder.teamType === 'singles';
-    
     // Validate selections
-    if (isSingles) {
-      if (!selectedPlayer1 || !selectedPlayer2) {
-        setError('Please select two players');
-        return;
-      }
-      if (selectedPlayer1.userId === selectedPlayer2.userId) {
-        setError('Cannot create a matchup with the same player');
-        return;
-      }
-    } else {
-      if (!selectedTeam1 || !selectedTeam2) {
-        setError('Please select two teams');
-        return;
-      }
-      if (selectedTeam1.id === selectedTeam2.id) {
-        setError('Cannot create a matchup with the same team');
-        return;
-      }
+    if (!selectedPlayer1 || !selectedPlayer2) {
+      setError('Please select two players');
+      return;
+    }
+    if (selectedPlayer1.userId === selectedPlayer2.userId) {
+      setError('Cannot create a matchup with the same player');
+      return;
     }
 
     try {
@@ -162,17 +157,10 @@ export default function CreateMatchupScreen({ navigation }) {
         status: 'pending',
       };
 
-      if (isSingles) {
-        matchupData.player1Id = selectedPlayer1.userId;
-        matchupData.player2Id = selectedPlayer2.userId;
-        matchupData.player1Name = selectedPlayer1.nickname || 'Unknown';
-        matchupData.player2Name = selectedPlayer2.nickname || 'Unknown';
-      } else {
-        matchupData.team1Id = selectedTeam1.id;
-        matchupData.team2Id = selectedTeam2.id;
-        matchupData.team1Name = selectedTeam1.name || 'Unknown';
-        matchupData.team2Name = selectedTeam2.name || 'Unknown';
-      }
+      matchupData.player1Id = selectedPlayer1.userId;
+      matchupData.player2Id = selectedPlayer2.userId;
+      matchupData.player1Name = selectedPlayer1.nickname || 'Unknown';
+      matchupData.player2Name = selectedPlayer2.nickname || 'Unknown';
 
       await addDoc(collection(db, 'matchups'), matchupData);
 
@@ -212,8 +200,7 @@ export default function CreateMatchupScreen({ navigation }) {
     );
   }
 
-  const isSingles = ladder.teamType === 'singles';
-  const items = isSingles ? availablePlayers : availableTeams;
+  const items = availablePlayers;
   const hasEnoughItems = items.length >= 2;
 
   return (
@@ -242,35 +229,29 @@ export default function CreateMatchupScreen({ navigation }) {
         {!hasEnoughItems ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              Not enough {isSingles ? 'players' : 'teams'} to create a matchup. Need at least 2.
+              Not enough players to create a matchup. Need at least 2.
             </Text>
           </View>
         ) : (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                Select {isSingles ? 'Player' : 'Team'} 1
+                Select Player 1
               </Text>
               <View style={styles.itemsList}>
                 {items.map((item, index) => {
-                  const isSelected = isSingles
-                    ? selectedPlayer1?.userId === item.userId
-                    : selectedTeam1?.id === item.id;
-                  const name = isSingles ? (item.nickname || 'Unknown') : (item.name || 'Unknown');
+                  const isSelected = selectedPlayer1?.userId === item.userId;
+                  const name = item.nickname || 'Unknown';
                   
                   return (
                     <TouchableOpacity
-                      key={isSingles ? item.userId : item.id}
+                      key={item.userId}
                       style={[
                         styles.itemButton,
                         isSelected && styles.itemButtonActive,
                       ]}
                       onPress={() => {
-                        if (isSingles) {
-                          setSelectedPlayer1(item);
-                        } else {
-                          setSelectedTeam1(item);
-                        }
+                        setSelectedPlayer1(item);
                         setError('');
                       }}
                       disabled={saving}
@@ -291,14 +272,12 @@ export default function CreateMatchupScreen({ navigation }) {
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                Select {isSingles ? 'Player' : 'Team'} 2
+                Select Player 2
               </Text>
               <View style={styles.itemsList}>
                 {items.map((item, index) => {
-                  const isSelected = isSingles
-                    ? selectedPlayer2?.userId === item.userId
-                    : selectedTeam2?.id === item.id;
-                  const name = isSingles ? (item.nickname || 'Unknown') : (item.name || 'Unknown');
+                  const isSelected = selectedPlayer2?.userId === item.userId;
+                  const name = item.nickname || 'Unknown';
                   
                   return (
                     <TouchableOpacity

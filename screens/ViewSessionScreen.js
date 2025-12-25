@@ -174,33 +174,64 @@ export default function ViewSessionScreen({ navigation }) {
 
     try {
       setLoadingTeams(true);
-      const teamsQuery = query(
-        collection(db, 'ladderteams'),
+      
+      // Fetch session members
+      const membersQuery = query(
+        collection(db, 'sessionMembers'),
         where('sessionId', '==', sessionId)
       );
-      const teamsSnapshot = await getDocs(teamsQuery);
-      const teamsList = teamsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const membersSnapshot = await getDocs(membersQuery);
+      
+      // Check if user is in this session
+      const userMember = membersSnapshot.docs.find(doc => doc.data().userId === user.uid);
+      setUserTeamId(userMember ? userMember.id : null);
 
-      // Check if user is on any team in this session
-      const userTeam = teamsList.find(team => 
-        team.memberIds && team.memberIds.includes(user.uid)
-      );
-      setUserTeamId(userTeam ? userTeam.id : null);
+      // Fetch member details from laddermembers to get nickname, points, rank
+      const memberDetailsPromises = membersSnapshot.docs.map(async (memberDoc) => {
+        const memberData = memberDoc.data();
+        const userId = memberData.userId;
+        
+        // Get member details from laddermembers
+        const ladderMemberQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('memberId', '==', userId)
+        );
+        const ladderMemberSnapshot = await getDocs(ladderMemberQuery);
+        
+        if (!ladderMemberSnapshot.empty) {
+          const ladderMemberData = ladderMemberSnapshot.docs[0].data();
+          return {
+            id: memberDoc.id,
+            userId: userId,
+            nickname: ladderMemberData.nickname || 'Unknown',
+            points: ladderMemberData.points || 0,
+            rank: ladderMemberData.rank || 0,
+          };
+        }
+        
+        return {
+          id: memberDoc.id,
+          userId: userId,
+          nickname: 'Unknown',
+          points: 0,
+          rank: 0,
+        };
+      });
 
-      // Sort teams by rank or points
-      teamsList.sort((a, b) => {
+      const membersList = await Promise.all(memberDetailsPromises);
+
+      // Sort members by rank or points
+      membersList.sort((a, b) => {
         if (a.rank !== undefined && b.rank !== undefined) {
           return (a.rank || 999) - (b.rank || 999);
         }
         return (b.points || 0) - (a.points || 0);
       });
 
-      setTeams(teamsList);
+      setTeams(membersList);
     } catch (error) {
-      console.error('Error fetching teams:', error);
+      console.error('Error fetching session members:', error);
       setTeams([]);
     } finally {
       setLoadingTeams(false);
@@ -283,28 +314,8 @@ export default function ViewSessionScreen({ navigation }) {
     try {
       setSaving(true);
 
-      // Get current team data
-      const teamDoc = await getDoc(doc(db, 'ladderteams', teamToLeave.id));
-      if (!teamDoc.exists()) {
-        alert('Team not found');
-        setShowLeaveTeamModal(false);
-        setTeamToLeave(null);
-        setSaving(false);
-        return;
-      }
-
-      const teamData = teamDoc.data();
-      const currentMembers = teamData.members || [];
-      const currentMemberIds = teamData.memberIds || [];
-
-      // Remove user from members and memberIds
-      const newMembers = currentMembers.filter(m => m.userId !== user.uid);
-      const newMemberIds = currentMemberIds.filter(id => id !== user.uid);
-
-      await updateDoc(doc(db, 'ladderteams', teamToLeave.id), {
-        members: newMembers,
-        memberIds: newMemberIds,
-      });
+      // Delete sessionMembers document
+      await deleteDoc(doc(db, 'sessionMembers', teamToLeave.id));
 
       // Update userTeamId state
       setUserTeamId(null);
@@ -314,8 +325,8 @@ export default function ViewSessionScreen({ navigation }) {
       setTeamToLeave(null);
       await fetchTeams();
     } catch (error) {
-      console.error('Error leaving team:', error);
-      alert('Failed to leave team. Please try again.');
+      console.error('Error leaving session:', error);
+      alert('Failed to leave session. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -364,9 +375,9 @@ export default function ViewSessionScreen({ navigation }) {
     if (teams.length === 0) {
       return (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>No {isSingles ? 'players' : 'teams'} yet</Text>
+          <Text style={styles.emptyStateText}>No players yet</Text>
           <Text style={styles.emptyStateSubtext}>
-            {!isSingles && 'Create a team to get started!'}
+            Join the session to get started!
           </Text>
         </View>
       );
@@ -376,22 +387,12 @@ export default function ViewSessionScreen({ navigation }) {
 
     return (
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {teams.map((team, index) => {
-          if (isSingles) {
-            // For singles, show players
-            const playerMember = team.members && team.members[0];
-            if (!playerMember) return null;
-            
-            // Construct member object from team data
-            const member = {
-              userId: playerMember.userId,
-              nickname: playerMember.nickname || 'Unknown',
-              rank: team.rank,
-              points: team.points || 0,
-            };
-
-            return (
-              <View key={team.id || index} style={styles.itemWrapper}>
+        {teams.map((member, index) => {
+          const isCurrentUser = user && member.userId === user.uid;
+          
+          return (
+            <View key={member.id || index} style={styles.itemWrapper}>
+              <View style={styles.teamCardWrapper}>
                 <LadderMemberCard
                   member={member}
                   index={index}
@@ -399,31 +400,20 @@ export default function ViewSessionScreen({ navigation }) {
                   email={memberEmails[member.userId] || ''}
                   phoneNumber={memberPhoneNumbers[member.userId] || ''}
                 />
+                {isCurrentUser && (
+                  <TouchableOpacity
+                    style={styles.leaveTeamButton}
+                    onPress={() => handleLeaveTeam(member)}
+                    disabled={saving}
+                    accessibilityLabel="Leave Session"
+                    accessibilityHint="Tap to leave this session"
+                  >
+                    <Text style={styles.leaveTeamButtonIcon}>👋</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            );
-          } else {
-            // For doubles/teams, show teams
-            const isUserOnTeam = user && team.memberIds && team.memberIds.includes(user.uid);
-            
-            return (
-              <View key={team.id || index} style={styles.itemWrapper}>
-                <View style={styles.teamCardWrapper}>
-                  <TeamCard team={team} index={index} />
-                  {isUserOnTeam && (
-                    <TouchableOpacity
-                      style={styles.leaveTeamButton}
-                      onPress={() => handleLeaveTeam(team)}
-                      disabled={saving}
-                      accessibilityLabel="Leave Team"
-                      accessibilityHint="Tap to leave this team"
-                    >
-                      <Text style={styles.leaveTeamButtonIcon}>👋</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          }
+            </View>
+          );
         })}
       </ScrollView>
     );
@@ -469,8 +459,8 @@ export default function ViewSessionScreen({ navigation }) {
             : 'Unknown';
 
           // Get names
-          const name1 = isSingles ? matchup.player1Name : matchup.team1Name;
-          const name2 = isSingles ? matchup.player2Name : matchup.team2Name;
+          const name1 = matchup.player1Name;
+          const name2 = matchup.player2Name;
 
           return (
             <View key={matchup.id} style={styles.matchupCard}>
@@ -540,14 +530,6 @@ export default function ViewSessionScreen({ navigation }) {
           <Text style={styles.sessionInfoText}>
             📅 {startDateStr} - {endDateStr}
           </Text>
-          {!isSingles && !userTeamId && (
-            <TouchableOpacity
-              style={styles.createTeamButton}
-              onPress={() => navigation.navigate('CreateTeam', { sessionId: sessionId, ladderId: ladderId })}
-            >
-              <Text style={styles.createTeamButtonText}>Create Team</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 

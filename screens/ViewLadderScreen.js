@@ -29,10 +29,6 @@ export default function ViewLadderScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [memberEmails, setMemberEmails] = useState({}); // userId -> email mapping
   const [memberPhoneNumbers, setMemberPhoneNumbers] = useState({}); // userId -> phoneNumber mapping
-  const [showLeaveTeamModal, setShowLeaveTeamModal] = useState(false);
-  const [teamToLeave, setTeamToLeave] = useState(null);
-  const [showDeleteTeamModal, setShowDeleteTeamModal] = useState(false);
-  const [teamToDelete, setTeamToDelete] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [userSessionStatus, setUserSessionStatus] = useState({}); // sessionId -> boolean (true if user is in session)
@@ -213,13 +209,13 @@ export default function ViewLadderScreen({ navigation }) {
         const statusMap = {};
         await Promise.all(sessionsList.map(async (session) => {
           try {
-            const teamsQuery = query(
-              collection(db, 'ladderteams'),
+            const membersQuery = query(
+              collection(db, 'sessionMembers'),
               where('sessionId', '==', session.id),
-              where('memberIds', 'array-contains', user.uid)
+              where('userId', '==', user.uid)
             );
-            const teamsSnapshot = await getDocs(teamsQuery);
-            statusMap[session.id] = !teamsSnapshot.empty;
+            const membersSnapshot = await getDocs(membersQuery);
+            statusMap[session.id] = !membersSnapshot.empty;
           } catch (error) {
             console.error(`Error checking session status for ${session.id}:`, error);
             statusMap[session.id] = false;
@@ -382,119 +378,29 @@ export default function ViewLadderScreen({ navigation }) {
     setExpandedPlayer(null);
   };
 
-  const handleLeaveTeam = (team) => {
-    setTeamToLeave(team);
-    setShowLeaveTeamModal(true);
-  };
-
-  const confirmLeaveTeam = async () => {
-    if (!teamToLeave) return;
-
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setSaving(true);
-
-      // Get current team data
-      const teamDoc = await getDoc(doc(db, 'ladderteams', teamToLeave.id));
-      if (!teamDoc.exists()) {
-        alert('Team not found');
-        setShowLeaveTeamModal(false);
-        setTeamToLeave(null);
-        setSaving(false);
-        return;
-      }
-
-      const teamData = teamDoc.data();
-      const currentMembers = teamData.members || [];
-      const currentMemberIds = teamData.memberIds || [];
-
-      // Remove user from members and memberIds
-      const newMembers = currentMembers.filter(m => m.userId !== user.uid);
-      const newMemberIds = currentMemberIds.filter(id => id !== user.uid);
-
-      await updateDoc(doc(db, 'ladderteams', teamToLeave.id), {
-        members: newMembers,
-        memberIds: newMemberIds,
-      });
-
-      // Close modal
-      setShowLeaveTeamModal(false);
-      setTeamToLeave(null);
-    } catch (error) {
-      console.error('Error leaving team:', error);
-      alert('Failed to leave team. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelLeaveTeam = () => {
-    setShowLeaveTeamModal(false);
-    setTeamToLeave(null);
-  };
-
-  const handleDeleteTeam = (team) => {
-    setTeamToDelete(team);
-    setShowDeleteTeamModal(true);
-  };
-
-  const confirmDeleteTeam = async () => {
-    if (!teamToDelete) return;
-
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      setSaving(true);
-
-      // Delete the team document
-      await deleteDoc(doc(db, 'ladderteams', teamToDelete.id));
-
-
-      // Close modal
-      setShowDeleteTeamModal(false);
-      setTeamToDelete(null);
-    } catch (error) {
-      console.error('Error deleting team:', error);
-      alert('Failed to delete team. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const cancelDeleteTeam = () => {
-    setShowDeleteTeamModal(false);
-    setTeamToDelete(null);
-  };
-
   const handleJoinSession = async (session) => {
     const user = auth.currentUser;
     if (!user) return;
 
-    const isSingles = ladder?.teamType === 'singles';
-
-    if (isSingles) {
-      // For singles, create a single-player team automatically
-      try {
+    // For all ladders, join session creates a sessionMembers document
+    try {
         setJoiningSession(session.id);
         
-        // Check if user is already on a team in this session
-        const existingTeamsQuery = query(
-          collection(db, 'ladderteams'),
+        // Check if user is already in this session
+        const existingMemberQuery = query(
+          collection(db, 'sessionMembers'),
           where('sessionId', '==', session.id),
-          where('memberIds', 'array-contains', user.uid)
+          where('userId', '==', user.uid)
         );
-        const existingTeamsSnapshot = await getDocs(existingTeamsQuery);
+        const existingMemberSnapshot = await getDocs(existingMemberQuery);
         
-        if (!existingTeamsSnapshot.empty) {
+        if (!existingMemberSnapshot.empty) {
           alert('You are already in this session.');
           setJoiningSession(null);
           return;
         }
 
-        // Get user's member data from laddermembers
+        // Get user's member data from laddermembers to verify they're a ladder member
         const userMemberQuery = query(
           collection(db, 'laddermembers'),
           where('ladderId', '==', ladderId),
@@ -508,25 +414,12 @@ export default function ViewLadderScreen({ navigation }) {
           return;
         }
 
-        const userMemberData = userMemberSnapshot.docs[0].data();
-
-        // Create single-player team
-        const teamMembers = [{
-          userId: user.uid,
-          nickname: userMemberData.nickname || 'Unknown',
-          points: userMemberData.points || 0,
-        }];
-
-        await addDoc(collection(db, 'ladderteams'), {
+        // Create sessionMembers document
+        await addDoc(collection(db, 'sessionMembers'), {
           sessionId: session.id,
           ladderId: ladderId,
-          name: userMemberData.nickname || 'Player', // For singles, team name is player name
-          members: teamMembers,
-          memberIds: [user.uid],
-          points: 0,
-          rank: 0,
+          userId: user.uid,
           createdAt: serverTimestamp(),
-          createdBy: user.uid,
         });
 
         // Update user session status
@@ -538,10 +431,6 @@ export default function ViewLadderScreen({ navigation }) {
       } finally {
         setJoiningSession(null);
       }
-    } else {
-      // For doubles/teams, navigate to CreateTeamScreen
-      navigation.navigate('CreateTeam', { sessionId: session.id, ladderId: ladderId });
-    }
   };
 
   const renderPlayersList = () => {
@@ -814,79 +703,6 @@ export default function ViewLadderScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Leave Team Confirmation Modal */}
-      <Modal
-        visible={showLeaveTeamModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelLeaveTeam}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Leave Team</Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to leave <Text style={styles.modalBoldText}>{teamToLeave?.name}</Text>?
-            </Text>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={cancelLeaveTeam}
-                disabled={saving}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirmButton]}
-                onPress={confirmLeaveTeam}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalConfirmButtonText}>Confirm</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Delete Team Confirmation Modal */}
-      <Modal
-        visible={showDeleteTeamModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelDeleteTeam}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Delete Team</Text>
-            <Text style={styles.modalMessage}>
-              Are you sure you want to delete <Text style={styles.modalBoldText}>{teamToDelete?.name}</Text>? This action cannot be undone.
-            </Text>
-            <View style={styles.modalButtonContainer}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalCancelButton]}
-                onPress={cancelDeleteTeam}
-                disabled={saving}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalDeleteButton]}
-                onPress={confirmDeleteTeam}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalDeleteButtonText}>Delete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
