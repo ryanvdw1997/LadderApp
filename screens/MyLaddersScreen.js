@@ -24,6 +24,7 @@ export default function MyLaddersScreen({ navigation }) {
   const [leaveModalVisible, setLeaveModalVisible] = useState(false);
   const [ladderToLeave, setLadderToLeave] = useState(null);
   const [leaving, setLeaving] = useState(false);
+  const [showCannotLeaveModal, setShowCannotLeaveModal] = useState(false);
 
   const fetchLadders = async () => {
     try {
@@ -153,6 +154,40 @@ export default function MyLaddersScreen({ navigation }) {
     try {
       setLeaving(true);
       const ladderId = ladderToLeave.id;
+
+      // Check if user is an admin
+      const userMemberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', user.uid)
+      );
+      const userMemberSnapshot = await getDocs(userMemberQuery);
+      
+      if (!userMemberSnapshot.empty) {
+        const userMemberData = userMemberSnapshot.docs[0].data();
+        const isUserAdmin = userMemberData.isAdmin || false;
+
+        // If user is an admin, check if there are other admins
+        if (isUserAdmin) {
+          const allAdminsQuery = query(
+            collection(db, 'laddermembers'),
+            where('ladderId', '==', ladderId),
+            where('isAdmin', '==', true)
+          );
+          const allAdminsSnapshot = await getDocs(allAdminsQuery);
+          
+          // If user is the only admin, prevent leaving
+          console.log('Checking admin count. Total admins:', allAdminsSnapshot.size);
+          if (allAdminsSnapshot.size <= 1) {
+            console.log('User is the only admin, preventing leave');
+            setLeaveModalVisible(false);
+            setLeaving(false);
+            // Keep ladderToLeave so we can use it in the cannot leave modal
+            setShowCannotLeaveModal(true);
+            return;
+          }
+        }
+      }
 
       // Use batch for efficient deletion
       const batch = writeBatch(db);
@@ -321,6 +356,59 @@ export default function MyLaddersScreen({ navigation }) {
                 ) : (
                   <Text style={styles.modalConfirmButtonText}>Leave</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Cannot Leave Modal (Only Admin) */}
+      <Modal
+        visible={showCannotLeaveModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowCannotLeaveModal(false);
+          setLadderToLeave(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Cannot Leave Ladder</Text>
+            <Text style={styles.modalMessage}>
+              You are the only admin of "{ladderToLeave?.name || 'this ladder'}". You must either delete the ladder or assign another admin before leaving.
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowCannotLeaveModal(false);
+                  setLadderToLeave(null);
+                }}
+              >
+                <Text style={styles.modalCancelButtonText}>OK</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalDeleteButton]}
+                onPress={() => {
+                  setShowCannotLeaveModal(false);
+                  setLadderToDelete(ladderToLeave);
+                  setLadderToLeave(null);
+                  setDeleteModalVisible(true);
+                }}
+              >
+                <Text style={styles.modalDeleteButtonText}>Delete Ladder</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={() => {
+                  setShowCannotLeaveModal(false);
+                  const ladderId = ladderToLeave?.id;
+                  setLadderToLeave(null);
+                  navigation.navigate('EditLadder', { ladderId: ladderId });
+                }}
+              >
+                <Text style={styles.modalConfirmButtonText}>Assign Admin</Text>
               </TouchableOpacity>
             </View>
           </View>

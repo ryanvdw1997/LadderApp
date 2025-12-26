@@ -189,9 +189,17 @@ export default StyleSheet.create({
     fontWeight: '600',
   },
   modalConfirmButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#6C5CE7',
   },
   modalConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalDeleteButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  modalDeleteButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
