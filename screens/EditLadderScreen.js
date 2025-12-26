@@ -33,9 +33,37 @@ export default function EditLadderScreen({ navigation }) {
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [adminIds, setAdminIds] = useState(new Set());
 
   useEffect(() => {
     fetchLadder();
+  }, [ladderId]);
+
+  // Fetch admin IDs
+  useEffect(() => {
+    const fetchAdminIds = async () => {
+      if (!ladderId) return;
+      
+      try {
+        const membersQuery = query(
+          collection(db, 'laddermembers'),
+          where('ladderId', '==', ladderId),
+          where('isAdmin', '==', true)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        const ids = new Set();
+        membersSnapshot.forEach((doc) => {
+          ids.add(doc.data().memberId);
+        });
+        setAdminIds(ids);
+      } catch (error) {
+        console.error('Error fetching admin IDs:', error);
+      }
+    };
+    
+    if (ladderId) {
+      fetchAdminIds();
+    }
   }, [ladderId]);
 
   const fetchLadder = async () => {
@@ -284,35 +312,6 @@ export default function EditLadderScreen({ navigation }) {
       </SafeAreaView>
     );
   }
-
-  // Fetch admin IDs for checking admin status
-  const [adminIds, setAdminIds] = useState(new Set());
-  
-  useEffect(() => {
-    const fetchAdminIds = async () => {
-      if (!ladderId) return;
-      
-      try {
-        const membersQuery = query(
-          collection(db, 'laddermembers'),
-          where('ladderId', '==', ladderId),
-          where('isAdmin', '==', true)
-        );
-        const membersSnapshot = await getDocs(membersQuery);
-        const ids = new Set();
-        membersSnapshot.forEach((doc) => {
-          ids.add(doc.data().memberId);
-        });
-        setAdminIds(ids);
-      } catch (error) {
-        console.error('Error fetching admin IDs:', error);
-      }
-    };
-    
-    if (ladderId) {
-      fetchAdminIds();
-    }
-  }, [ladderId]);
 
   const isAdmin = (userId) => {
     return adminIds.has(userId);
