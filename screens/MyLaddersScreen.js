@@ -110,6 +110,7 @@ export default function MyLaddersScreen({ navigation }) {
   };
 
   const handleDeleteLadder = (ladder) => {
+    console.log('Deleting ladder:', ladder.id);
     setLadderToDelete(ladder);
     setDeleteModalVisible(true);
   };
@@ -118,7 +119,58 @@ export default function MyLaddersScreen({ navigation }) {
     if (!ladderToDelete) return;
     
     try {
-      await deleteDoc(doc(db, 'ladders', ladderToDelete.id));
+      const ladderId = ladderToDelete.id;
+      console.log('Confirming delete of ladder:', ladderId);
+
+      // Use batch for efficient deletion
+      const batch = writeBatch(db);
+
+      // 1. Delete all laddermembers documents for this ladder
+      const laddermembersQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const laddermembersSnapshot = await getDocs(laddermembersQuery);
+      laddermembersSnapshot.forEach((memberDoc) => {
+        batch.delete(memberDoc.ref);
+      });
+
+      // 2. Delete all sessions for this ladder
+      const sessionsQuery = query(
+        collection(db, 'sessions'),
+        where('ladderId', '==', ladderId)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      sessionsSnapshot.forEach((sessionDoc) => {
+        batch.delete(sessionDoc.ref);
+      });
+
+      // 3. Delete all sessionMembers documents for this ladder
+      const sessionMembersQuery = query(
+        collection(db, 'sessionMembers'),
+        where('ladderId', '==', ladderId)
+      );
+      const sessionMembersSnapshot = await getDocs(sessionMembersQuery);
+      sessionMembersSnapshot.forEach((memberDoc) => {
+        batch.delete(memberDoc.ref);
+      });
+
+      // 4. Delete all matchups for this ladder
+      const matchupsQuery = query(
+        collection(db, 'matchups'),
+        where('ladderId', '==', ladderId)
+      );
+      const matchupsSnapshot = await getDocs(matchupsQuery);
+      matchupsSnapshot.forEach((matchupDoc) => {
+        batch.delete(matchupDoc.ref);
+      });
+
+      // 5. Delete the ladder itself
+      batch.delete(doc(db, 'ladders', ladderId));
+
+      // Commit all deletions
+      await batch.commit();
+
       // Refetch ladders to update the list
       await fetchLadders();
       setDeleteModalVisible(false);
