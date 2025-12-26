@@ -136,6 +136,7 @@ export default function MyLaddersScreen({ navigation }) {
       });
 
       // 2. Delete all sessions for this ladder
+      // 2. Delete all sessions for this ladder (and their sessionMembers will be handled in step 3)
       const sessionsQuery = query(
         collection(db, 'sessions'),
         where('ladderId', '==', ladderId)
@@ -156,6 +157,7 @@ export default function MyLaddersScreen({ navigation }) {
       });
 
       // 4. Delete all matchups for this ladder
+      // 4. Delete all matchups for this ladder (matchups are tied to sessions, but also have ladderId)
       const matchupsQuery = query(
         collection(db, 'matchups'),
         where('ladderId', '==', ladderId)
