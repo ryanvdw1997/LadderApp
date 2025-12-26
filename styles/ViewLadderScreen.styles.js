@@ -71,6 +71,7 @@ export default StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
+    alignItems: 'center',
   },
   createTeamButton: {
     backgroundColor: '#6C5CE7',
@@ -97,6 +98,29 @@ export default StyleSheet.create({
   },
   createTeamButtonDisabled: {
     opacity: 0.5,
+  },
+  leaveLadderButton: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FF6B6B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  leaveLadderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   createMatchupButton: {
     backgroundColor: '#6C5CE7',

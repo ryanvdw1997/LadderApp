@@ -111,6 +111,9 @@ export default StyleSheet.create({
   deleteButton: {
     backgroundColor: '#3A1F1F',
   },
+  leaveButton: {
+    backgroundColor: '#3A2F1F',
+  },
   actionButtonIcon: {
     fontSize: 18,
   },
