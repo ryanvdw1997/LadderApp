@@ -9,7 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, query, where, getDocs, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, deleteDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { Modal } from 'react-native';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/MyLaddersScreen.styles';
 import LadderCard from '../components/LadderCard';
@@ -20,6 +21,9 @@ export default function MyLaddersScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [ladderToDelete, setLadderToDelete] = useState(null);
+  const [leaveModalVisible, setLeaveModalVisible] = useState(false);
+  const [ladderToLeave, setLadderToLeave] = useState(null);
+  const [leaving, setLeaving] = useState(false);
 
   const fetchLadders = async () => {
     try {
@@ -135,6 +139,84 @@ export default function MyLaddersScreen({ navigation }) {
     setLadderToDelete(null);
   };
 
+  const handleLeaveLadder = (ladder) => {
+    setLadderToLeave(ladder);
+    setLeaveModalVisible(true);
+  };
+
+  const confirmLeave = async () => {
+    if (!ladderToLeave) return;
+    
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      setLeaving(true);
+      const ladderId = ladderToLeave.id;
+
+      // Use batch for efficient deletion
+      const batch = writeBatch(db);
+
+      // 1. Delete user's laddermembers document
+      const memberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', user.uid)
+      );
+      const memberSnapshot = await getDocs(memberQuery);
+      memberSnapshot.forEach((memberDoc) => {
+        batch.delete(memberDoc.ref);
+      });
+
+      // 2. Delete user's sessionMembers documents for all sessions in this ladder
+      // First get all sessions for this ladder
+      const sessionsQuery = query(
+        collection(db, 'sessions'),
+        where('ladderId', '==', ladderId)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      
+      // For each session, delete user's sessionMembers document
+      const sessionIds = sessionsSnapshot.docs.map(doc => doc.id);
+      for (const sessionId of sessionIds) {
+        // Query sessionMembers for this user in this session
+        const sessionMemberQuery = query(
+          collection(db, 'sessionMembers'),
+          where('sessionId', '==', sessionId),
+          where('userId', '==', user.uid)
+        );
+        const sessionMemberSnapshot = await getDocs(sessionMemberQuery);
+        sessionMemberSnapshot.forEach((memberDoc) => {
+          batch.delete(memberDoc.ref);
+        });
+      }
+
+      // Commit all deletions
+      await batch.commit();
+
+      // Refetch ladders to update the list
+      await fetchLadders();
+      setLeaveModalVisible(false);
+      setLadderToLeave(null);
+    } catch (error) {
+      console.error('Error leaving ladder:', error);
+      setLeaveModalVisible(false);
+      setLadderToLeave(null);
+      Alert.alert(
+        'Error',
+        'Failed to leave ladder. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  const cancelLeave = () => {
+    setLeaveModalVisible(false);
+    setLadderToLeave(null);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -195,6 +277,7 @@ export default function MyLaddersScreen({ navigation }) {
               onView={handleViewLadder}
               onEdit={handleEditLadder}
               onDelete={handleDeleteLadder}
+              onLeave={handleLeaveLadder}
             />
           ))
         )}
@@ -206,6 +289,43 @@ export default function MyLaddersScreen({ navigation }) {
         onCancel={cancelDelete}
         ladderName={ladderToDelete?.name || ''}
       />
+
+      {/* Leave Ladder Confirmation Modal */}
+      <Modal
+        visible={leaveModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLeave}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Leave Ladder</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to leave "{ladderToLeave?.name || 'this ladder'}"? You will be removed from all sessions and will need to be re-invited to rejoin.
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelLeave}
+                disabled={leaving}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={confirmLeave}
+                disabled={leaving}
+              >
+                {leaving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Leave</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

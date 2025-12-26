@@ -10,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase.config';
 import styles from '../styles/ViewLadderScreen.styles';
 import LadderMemberCard from '../components/LadderMemberCard';
@@ -35,6 +35,8 @@ export default function ViewLadderScreen({ navigation }) {
   const [joiningSession, setJoiningSession] = useState(null);
   const [adminIds, setAdminIds] = useState(new Set());
   const [members, setMembers] = useState([]); // Members fetched from laddermembers
+  const [showLeaveLadderModal, setShowLeaveLadderModal] = useState(false);
+  const [leavingLadder, setLeavingLadder] = useState(false);
 
   useEffect(() => {
     fetchLadder();
@@ -378,6 +380,73 @@ export default function ViewLadderScreen({ navigation }) {
     setExpandedPlayer(null);
   };
 
+  const handleLeaveLadder = () => {
+    setShowLeaveLadderModal(true);
+  };
+
+  const confirmLeaveLadder = async () => {
+    const user = auth.currentUser;
+    if (!user || !ladderId) return;
+
+    try {
+      setLeavingLadder(true);
+
+      // Use batch for efficient deletion
+      const batch = writeBatch(db);
+
+      // 1. Delete user's laddermembers document
+      const memberQuery = query(
+        collection(db, 'laddermembers'),
+        where('ladderId', '==', ladderId),
+        where('memberId', '==', user.uid)
+      );
+      const memberSnapshot = await getDocs(memberQuery);
+      memberSnapshot.forEach((memberDoc) => {
+        batch.delete(memberDoc.ref);
+      });
+
+      // 2. Delete user's sessionMembers documents for all sessions in this ladder
+      // First get all sessions for this ladder
+      const sessionsQuery = query(
+        collection(db, 'sessions'),
+        where('ladderId', '==', ladderId)
+      );
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      
+      // For each session, delete user's sessionMembers document
+      const sessionIds = sessionsSnapshot.docs.map(doc => doc.id);
+      for (const sessionId of sessionIds) {
+        // Query sessionMembers for this user in this session
+        const sessionMemberQuery = query(
+          collection(db, 'sessionMembers'),
+          where('sessionId', '==', sessionId),
+          where('userId', '==', user.uid)
+        );
+        const sessionMemberSnapshot = await getDocs(sessionMemberQuery);
+        sessionMemberSnapshot.forEach((memberDoc) => {
+          batch.delete(memberDoc.ref);
+        });
+      }
+
+      // Commit all deletions
+      await batch.commit();
+
+      // Navigate back to My Ladders
+      setShowLeaveLadderModal(false);
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error leaving ladder:', error);
+      setShowLeaveLadderModal(false);
+      alert('Failed to leave ladder. Please try again.');
+    } finally {
+      setLeavingLadder(false);
+    }
+  };
+
+  const cancelLeaveLadder = () => {
+    setShowLeaveLadderModal(false);
+  };
+
   const handleJoinSession = async (session) => {
     const user = auth.currentUser;
     if (!user) return;
@@ -619,14 +688,24 @@ export default function ViewLadderScreen({ navigation }) {
         </View>
         <View style={styles.headerTitleRow}>
           <Text style={styles.title}>{ladder.name}</Text>
-          {ladder.isAdmin && activeTab === 'sessions' && (
-            <TouchableOpacity
-              style={styles.createSessionButton}
-              onPress={() => navigation.navigate('CreateSession', { ladderId: ladderId })}
-            >
-              <Text style={styles.createSessionButtonText}>Create Session</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerButtons}>
+            {ladder.isAdmin && activeTab === 'sessions' && (
+              <TouchableOpacity
+                style={styles.createSessionButton}
+                onPress={() => navigation.navigate('CreateSession', { ladderId: ladderId })}
+              >
+                <Text style={styles.createSessionButtonText}>Create Session</Text>
+              </TouchableOpacity>
+            )}
+            {!ladder.isAdmin && (
+              <TouchableOpacity
+                style={styles.leaveLadderButton}
+                onPress={handleLeaveLadder}
+              >
+                <Text style={styles.leaveLadderButtonText}>👋 Leave</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
 
@@ -696,6 +775,43 @@ export default function ViewLadderScreen({ navigation }) {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <Text style={styles.modalConfirmButtonText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Leave Ladder Confirmation Modal */}
+      <Modal
+        visible={showLeaveLadderModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLeaveLadder}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Leave Ladder</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to leave "{ladder?.name || 'this ladder'}"? You will be removed from all sessions and will need to be re-invited to rejoin.
+            </Text>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelLeaveLadder}
+                disabled={leavingLadder}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalDeleteButton]}
+                onPress={confirmLeaveLadder}
+                disabled={leavingLadder}
+              >
+                {leavingLadder ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalDeleteButtonText}>Leave</Text>
                 )}
               </TouchableOpacity>
             </View>
