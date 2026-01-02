@@ -265,8 +265,10 @@ export default function MyLaddersScreen({ navigation }) {
       );
       const sessionsSnapshot = await getDocs(sessionsQuery);
       
-      // For each session, delete user's sessionMembers document
+      // Get session IDs for later use
       const sessionIds = sessionsSnapshot.docs.map(doc => doc.id);
+      
+      // For each session, delete user's sessionMembers document
       for (const sessionId of sessionIds) {
         // Query sessionMembers for this user in this session
         const sessionMemberQuery = query(
@@ -279,6 +281,36 @@ export default function MyLaddersScreen({ navigation }) {
           batch.delete(memberDoc.ref);
         });
       }
+
+      // 3. Delete all matchups where user is a player (player1 or player2) in this ladder
+      const userMatchupsQuery = query(
+        collection(db, 'matchups'),
+        where('ladderId', '==', ladderId)
+      );
+      const allMatchupsSnapshot = await getDocs(userMatchupsQuery);
+      
+      // Filter and delete matchups where user is player1 or player2
+      allMatchupsSnapshot.forEach((matchupDoc) => {
+        const matchupData = matchupDoc.data();
+        if (matchupData.player1Id === user.uid || matchupData.player2Id === user.uid) {
+          batch.delete(matchupDoc.ref);
+        }
+      });
+
+      // 4. Delete all team invites related to this ladder where user is sender or recipient
+      const teamInvitesQuery = query(
+        collection(db, 'teaminvites'),
+        where('ladderId', '==', ladderId)
+      );
+      const teamInvitesSnapshot = await getDocs(teamInvitesQuery);
+      
+      // Delete invites where user is sender or recipient
+      teamInvitesSnapshot.forEach((inviteDoc) => {
+        const inviteData = inviteDoc.data();
+        if (inviteData.senderId === user.uid || inviteData.recipientId === user.uid) {
+          batch.delete(inviteDoc.ref);
+        }
+      });
 
       // Commit all deletions
       await batch.commit();
