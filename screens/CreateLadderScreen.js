@@ -18,6 +18,7 @@ export default function CreateLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis'); // 'tennis' or 'pickleball'
   const [teamType, setTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
+  const [matchupTeamType, setMatchupTeamType] = useState('singles'); // 'singles' or 'doubles' - only used when teamType === 'teams'
   const [nickname, setNickname] = useState('');
   const [userFirstName, setUserFirstName] = useState('');
   const [userLastName, setUserLastName] = useState('');
@@ -125,7 +126,7 @@ export default function CreateLadderScreen({ navigation }) {
       const finalNickname = nickname.trim() || defaultName;
 
       // Create ladder document in Firestore
-      const ladderDocRef = await addDoc(collection(db, 'ladders'), {
+      const ladderData = {
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
@@ -133,7 +134,14 @@ export default function CreateLadderScreen({ navigation }) {
         joinCode: joinCode,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-      });
+      };
+
+      // Only include matchupTeamType if teamType is 'teams'
+      if (teamType === 'teams') {
+        ladderData.matchupTeamType = matchupTeamType;
+      }
+
+      const ladderDocRef = await addDoc(collection(db, 'ladders'), ladderData);
 
       // Create laddermembers document for the creator (who is an admin)
       await addDoc(collection(db, 'laddermembers'), {
@@ -330,6 +338,72 @@ export default function CreateLadderScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Matchup Team Type - only shown when teamType is 'teams' */}
+            {teamType === 'teams' && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Matchup Team Type</Text>
+                <Text style={styles.inputHint}>
+                  How are matchups structured within team sessions?
+                </Text>
+                <View style={styles.teamTypeContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.teamTypeButton,
+                      matchupTeamType === 'singles' && styles.teamTypeButtonActive,
+                    ]}
+                    onPress={() => setMatchupTeamType('singles')}
+                  >
+                    <Text style={styles.teamTypeEmoji}>👤</Text>
+                    <Text
+                      style={[
+                        styles.teamTypeText,
+                        matchupTeamType === 'singles' && styles.teamTypeTextActive,
+                      ]}
+                    >
+                      Singles
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.teamTypeButton,
+                      matchupTeamType === 'doubles' && styles.teamTypeButtonActive,
+                    ]}
+                    onPress={() => setMatchupTeamType('doubles')}
+                  >
+                    <Text style={styles.teamTypeEmoji}>👥</Text>
+                    <Text
+                      style={[
+                        styles.teamTypeText,
+                        matchupTeamType === 'doubles' && styles.teamTypeTextActive,
+                      ]}
+                    >
+                      Doubles
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.teamTypeButton,
+                      styles.teamTypeButtonLast,
+                      matchupTeamType === 'teams' && styles.teamTypeButtonActive,
+                    ]}
+                    onPress={() => setMatchupTeamType('teams')}
+                  >
+                    <Text style={styles.teamTypeEmoji}>👤👤👤</Text>
+                    <Text
+                      style={[
+                        styles.teamTypeText,
+                        matchupTeamType === 'teams' && styles.teamTypeTextActive,
+                      ]}
+                    >
+                      Team vs Team
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Visibility</Text>

@@ -26,6 +26,7 @@ export default function EditLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis');
   const [teamType, setTeamType] = useState('singles');
+  const [matchupTeamType, setMatchupTeamType] = useState('singles'); // 'singles' or 'doubles' - only used when teamType === 'teams'
   const [isPublic, setIsPublic] = useState(true);
   const [activeTab, setActiveTab] = useState('players');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
@@ -120,6 +121,7 @@ export default function EditLadderScreen({ navigation }) {
         setLadderName(data.name || '');
         setGameType(data.type || 'tennis');
         setTeamType(data.teamType || 'singles');
+        setMatchupTeamType(data.matchupTeamType || 'singles');
         setIsPublic(data.public === 1);
       } else {
         console.error('Ladder not found');
@@ -148,16 +150,27 @@ export default function EditLadderScreen({ navigation }) {
         public: isPublic ? 1 : 0,
       };
 
+      // Only include matchupTeamType if teamType is 'teams', otherwise remove it
+      if (teamType === 'teams') {
+        updates.matchupTeamType = matchupTeamType;
+      }
+
       await updateDoc(doc(db, 'ladders', ladderId), updates);
       
       // Update local state
-      setLadder({ 
+      const updatedLadder = { 
         ...ladder, 
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
         public: isPublic ? 1 : 0,
-      });
+      };
+      
+      if (teamType === 'teams') {
+        updatedLadder.matchupTeamType = matchupTeamType;
+      }
+      
+      setLadder(updatedLadder);
 
       // Show success message
       setShowSuccessModal(true);
@@ -522,6 +535,69 @@ export default function EditLadderScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Matchup Team Type - only shown when teamType is 'teams' */}
+        {teamType === 'teams' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Matchup Team Type</Text>
+            <Text style={styles.sectionDescription}>
+              How are matchups structured within team sessions?
+            </Text>
+            <View style={styles.teamTypeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.teamTypeButton,
+                  matchupTeamType === 'singles' && styles.teamTypeButtonActive,
+                ]}
+                onPress={() => setMatchupTeamType('singles')}
+                disabled={saving}
+              >
+                <Text
+                  style={[
+                    styles.teamTypeText,
+                    matchupTeamType === 'singles' && styles.teamTypeTextActive,
+                  ]}
+                >
+                  👤 Singles
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.teamTypeButton,
+                  matchupTeamType === 'doubles' && styles.teamTypeButtonActive,
+                ]}
+                onPress={() => setMatchupTeamType('doubles')}
+                disabled={saving}
+              >
+                <Text
+                  style={[
+                    styles.teamTypeText,
+                    matchupTeamType === 'doubles' && styles.teamTypeTextActive,
+                  ]}
+                >
+                  👥 Doubles
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.teamTypeButton,
+                  matchupTeamType === 'teams' && styles.teamTypeButtonActive,
+                ]}
+                onPress={() => setMatchupTeamType('teams')}
+                disabled={saving}
+              >
+                <Text
+                  style={[
+                    styles.teamTypeText,
+                    matchupTeamType === 'teams' && styles.teamTypeTextActive,
+                  ]}
+                >
+                  👤👤👤 Team vs Team
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Privacy Section */}
         <View style={styles.section}>

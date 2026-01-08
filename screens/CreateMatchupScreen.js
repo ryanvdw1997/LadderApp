@@ -19,8 +19,12 @@ export default function CreateMatchupScreen({ navigation }) {
   const [session, setSession] = useState(null);
   const [ladder, setLadder] = useState(null);
   const [availablePlayers, setAvailablePlayers] = useState([]);
+  const [availableTeams, setAvailableTeams] = useState([]);
   const [selectedPlayer1, setSelectedPlayer1] = useState(null);
   const [selectedPlayer2, setSelectedPlayer2] = useState(null);
+  const [selectedTeam1, setSelectedTeam1] = useState(null);
+  const [selectedTeam2, setSelectedTeam2] = useState(null);
+  const [isTeamMatchup, setIsTeamMatchup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -60,53 +64,81 @@ export default function CreateMatchupScreen({ navigation }) {
       }
 
       const ladderData = ladderDoc.data();
-      setLadder({
+      const ladderObj = {
         id: ladderDoc.id,
         ...ladderData,
-      });
+      };
+      setLadder(ladderObj);
 
-      // Query session members
-      const membersQuery = query(
-        collection(db, 'sessionMembers'),
-        where('sessionId', '==', sessionId)
-      );
-      const membersSnapshot = await getDocs(membersQuery);
-      
-      // Fetch member details from laddermembers to get nickname, points, rank
-      const memberDetailsPromises = membersSnapshot.docs.map(async (memberDoc) => {
-        const memberData = memberDoc.data();
-        const userId = memberData.userId;
-        
-        // Get member details from laddermembers
-        const ladderMemberQuery = query(
-          collection(db, 'laddermembers'),
-          where('ladderId', '==', ladderId),
-          where('memberId', '==', userId)
+      // Check if this is a team vs team matchup
+      const isTeamVsTeam = ladderData.teamType === 'teams' && ladderData.matchupTeamType === 'teams';
+      setIsTeamMatchup(isTeamVsTeam);
+
+      if (isTeamVsTeam) {
+        // Fetch teams for this session
+        const teamsQuery = query(
+          collection(db, 'ladderteams'),
+          where('sessionId', '==', sessionId)
         );
-        const ladderMemberSnapshot = await getDocs(ladderMemberQuery);
+        const teamsSnapshot = await getDocs(teamsQuery);
         
-        if (!ladderMemberSnapshot.empty) {
-          const ladderMemberData = ladderMemberSnapshot.docs[0].data();
+        const teamsList = teamsSnapshot.docs.map((teamDoc) => {
+          const teamData = teamDoc.data();
+          return {
+            teamId: teamDoc.id,
+            name: teamData.name || 'Unnamed Team',
+            points: teamData.points || 0,
+            rank: teamData.rank || 0,
+            memberIds: teamData.memberIds || [],
+            members: teamData.members || [],
+          };
+        });
+        
+        setAvailableTeams(teamsList);
+        setAvailablePlayers([]);
+      } else {
+        // Query session members for player-based matchups
+        const membersQuery = query(
+          collection(db, 'sessionMembers'),
+          where('sessionId', '==', sessionId)
+        );
+        const membersSnapshot = await getDocs(membersQuery);
+        
+        // Fetch member details from laddermembers to get nickname, points, rank
+        const memberDetailsPromises = membersSnapshot.docs.map(async (memberDoc) => {
+          const memberData = memberDoc.data();
+          const userId = memberData.userId;
+          
+          // Get member details from laddermembers
+          const ladderMemberQuery = query(
+            collection(db, 'laddermembers'),
+            where('ladderId', '==', ladderId),
+            where('memberId', '==', userId)
+          );
+          const ladderMemberSnapshot = await getDocs(ladderMemberQuery);
+          
+          if (!ladderMemberSnapshot.empty) {
+            const ladderMemberData = ladderMemberSnapshot.docs[0].data();
+            return {
+              userId: userId,
+              nickname: ladderMemberData.nickname || 'Unknown',
+              points: ladderMemberData.points || 0,
+              rank: ladderMemberData.rank || 0,
+            };
+          }
+          
           return {
             userId: userId,
-            nickname: ladderMemberData.nickname || 'Unknown',
-            points: ladderMemberData.points || 0,
-            rank: ladderMemberData.rank || 0,
+            nickname: 'Unknown',
+            points: 0,
+            rank: 0,
           };
-        }
-        
-        return {
-          userId: userId,
-          nickname: 'Unknown',
-          points: 0,
-          rank: 0,
-        };
-      });
+        });
 
-      const playersList = await Promise.all(memberDetailsPromises);
-      
-      // For both singles and doubles/teams, we show individual players now
-      setAvailablePlayers(playersList);
+        const playersList = await Promise.all(memberDetailsPromises);
+        setAvailablePlayers(playersList);
+        setAvailableTeams([]);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Failed to load data');
@@ -129,13 +161,24 @@ export default function CreateMatchupScreen({ navigation }) {
       }
 
     // Validate selections
-    if (!selectedPlayer1 || !selectedPlayer2) {
-      setError('Please select two players');
-      return;
-    }
-    if (selectedPlayer1.userId === selectedPlayer2.userId) {
-      setError('Cannot create a matchup with the same player');
-      return;
+    if (isTeamMatchup) {
+      if (!selectedTeam1 || !selectedTeam2) {
+        setError('Please select two teams');
+        return;
+      }
+      if (selectedTeam1.teamId === selectedTeam2.teamId) {
+        setError('Cannot create a matchup with the same team');
+        return;
+      }
+    } else {
+      if (!selectedPlayer1 || !selectedPlayer2) {
+        setError('Please select two players');
+        return;
+      }
+      if (selectedPlayer1.userId === selectedPlayer2.userId) {
+        setError('Cannot create a matchup with the same player');
+        return;
+      }
     }
 
     try {
@@ -157,10 +200,21 @@ export default function CreateMatchupScreen({ navigation }) {
         status: 'pending',
       };
 
-      matchupData.player1Id = selectedPlayer1.userId;
-      matchupData.player2Id = selectedPlayer2.userId;
-      matchupData.player1Name = selectedPlayer1.nickname || 'Unknown';
-      matchupData.player2Name = selectedPlayer2.nickname || 'Unknown';
+      if (isTeamMatchup) {
+        // Team vs Team matchup
+        matchupData.team1Id = selectedTeam1.teamId;
+        matchupData.team2Id = selectedTeam2.teamId;
+        matchupData.team1Name = selectedTeam1.name || 'Unknown Team';
+        matchupData.team2Name = selectedTeam2.name || 'Unknown Team';
+        matchupData.matchupType = 'team-vs-team';
+      } else {
+        // Player-based matchup (singles or doubles)
+        matchupData.player1Id = selectedPlayer1.userId;
+        matchupData.player2Id = selectedPlayer2.userId;
+        matchupData.player1Name = selectedPlayer1.nickname || 'Unknown';
+        matchupData.player2Name = selectedPlayer2.nickname || 'Unknown';
+        matchupData.matchupType = ladder?.matchupTeamType || 'singles';
+      }
 
       await addDoc(collection(db, 'matchups'), matchupData);
 
@@ -200,8 +254,10 @@ export default function CreateMatchupScreen({ navigation }) {
     );
   }
 
-  const items = availablePlayers;
+  const items = isTeamMatchup ? availableTeams : availablePlayers;
   const hasEnoughItems = items.length >= 2;
+  const selection1 = isTeamMatchup ? selectedTeam1 : selectedPlayer1;
+  const selection2 = isTeamMatchup ? selectedTeam2 : selectedPlayer2;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -229,29 +285,40 @@ export default function CreateMatchupScreen({ navigation }) {
         {!hasEnoughItems ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              Not enough players to create a matchup. Need at least 2.
+              {isTeamMatchup 
+                ? 'Not enough teams to create a matchup. Need at least 2 teams.'
+                : 'Not enough players to create a matchup. Need at least 2.'}
             </Text>
           </View>
         ) : (
           <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                Select Player 1
+                {isTeamMatchup ? 'Select Team 1' : 'Select Player 1'}
               </Text>
               <View style={styles.itemsList}>
                 {items.map((item, index) => {
-                  const isSelected = selectedPlayer1?.userId === item.userId;
-                  const name = item.nickname || 'Unknown';
+                  const isSelected = isTeamMatchup
+                    ? selection1?.teamId === item.teamId
+                    : selection1?.userId === item.userId;
+                  const name = isTeamMatchup 
+                    ? item.name 
+                    : (item.nickname || 'Unknown');
+                  const key = isTeamMatchup ? item.teamId : item.userId;
                   
                   return (
                     <TouchableOpacity
-                      key={item.userId}
+                      key={key}
                       style={[
                         styles.itemButton,
                         isSelected && styles.itemButtonActive,
                       ]}
                       onPress={() => {
-                        setSelectedPlayer1(item);
+                        if (isTeamMatchup) {
+                          setSelectedTeam1(item);
+                        } else {
+                          setSelectedPlayer1(item);
+                        }
                         setError('');
                       }}
                       disabled={saving}
@@ -272,22 +339,31 @@ export default function CreateMatchupScreen({ navigation }) {
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                Select Player 2
+                {isTeamMatchup ? 'Select Team 2' : 'Select Player 2'}
               </Text>
               <View style={styles.itemsList}>
                 {items.map((item, index) => {
-                  const isSelected = selectedPlayer2?.userId === item.userId;
-                  const name = item.nickname || 'Unknown';
+                  const isSelected = isTeamMatchup
+                    ? selection2?.teamId === item.teamId
+                    : selection2?.userId === item.userId;
+                  const name = isTeamMatchup 
+                    ? item.name 
+                    : (item.nickname || 'Unknown');
+                  const key = isTeamMatchup ? item.teamId : item.userId;
                   
                   return (
                     <TouchableOpacity
-                      key={item.userId}
+                      key={key}
                       style={[
                         styles.itemButton,
                         isSelected && styles.itemButtonActive,
                       ]}
                       onPress={() => {
-                        setSelectedPlayer2(item);
+                        if (isTeamMatchup) {
+                          setSelectedTeam2(item);
+                        } else {
+                          setSelectedPlayer2(item);
+                        }
                         setError('');
                       }}
                       disabled={saving}
