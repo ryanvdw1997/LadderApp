@@ -26,7 +26,17 @@ export default function EditLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis');
   const [teamType, setTeamType] = useState('singles');
+  const [matchupTeamType, setMatchupTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
   const [isPublic, setIsPublic] = useState(true);
+
+  // Update matchupTeamType when teamType changes
+  const handleTeamTypeChange = (newTeamType) => {
+    setTeamType(newTeamType);
+    // Auto-set matchupTeamType to match teamType when not 'teams'
+    if (newTeamType === 'singles' || newTeamType === 'doubles') {
+      setMatchupTeamType(newTeamType);
+    }
+  };
   const [activeTab, setActiveTab] = useState('players');
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
@@ -120,6 +130,7 @@ export default function EditLadderScreen({ navigation }) {
         setLadderName(data.name || '');
         setGameType(data.type || 'tennis');
         setTeamType(data.teamType || 'singles');
+        setMatchupTeamType(data.matchupTeamType || 'singles');
         setIsPublic(data.public === 1);
       } else {
         console.error('Ladder not found');
@@ -148,16 +159,25 @@ export default function EditLadderScreen({ navigation }) {
         public: isPublic ? 1 : 0,
       };
 
+      // Include matchupTeamType - it's set based on teamType
+      updates.matchupTeamType = matchupTeamType;
+
       await updateDoc(doc(db, 'ladders', ladderId), updates);
       
       // Update local state
-      setLadder({ 
+      const updatedLadder = { 
         ...ladder, 
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
         public: isPublic ? 1 : 0,
-      });
+      };
+      
+      if (teamType === 'teams') {
+        updatedLadder.matchupTeamType = matchupTeamType;
+      }
+      
+      setLadder(updatedLadder);
 
       // Show success message
       setShowSuccessModal(true);
@@ -474,7 +494,7 @@ export default function EditLadderScreen({ navigation }) {
                 styles.teamTypeButton,
                 teamType === 'singles' && styles.teamTypeButtonActive,
               ]}
-              onPress={() => setTeamType('singles')}
+              onPress={() => handleTeamTypeChange('singles')}
               disabled={saving}
             >
               <Text
@@ -491,7 +511,7 @@ export default function EditLadderScreen({ navigation }) {
                 styles.teamTypeButton,
                 teamType === 'doubles' && styles.teamTypeButtonActive,
               ]}
-              onPress={() => setTeamType('doubles')}
+              onPress={() => handleTeamTypeChange('doubles')}
               disabled={saving}
             >
               <Text
@@ -508,7 +528,7 @@ export default function EditLadderScreen({ navigation }) {
                 styles.teamTypeButton,
                 teamType === 'teams' && styles.teamTypeButtonActive,
               ]}
-              onPress={() => setTeamType('teams')}
+              onPress={() => handleTeamTypeChange('teams')}
               disabled={saving}
             >
               <Text
@@ -518,6 +538,73 @@ export default function EditLadderScreen({ navigation }) {
                 ]}
               >
                 👤👤👤 Teams
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Matchup Team Type - always shown, options disabled based on teamType */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Matchup Team Type</Text>
+          <Text style={styles.sectionDescription}>
+            How are matchups structured within sessions?
+          </Text>
+          <View style={styles.teamTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.teamTypeButton,
+                matchupTeamType === 'singles' && styles.teamTypeButtonActive,
+                teamType === 'doubles' && styles.teamTypeButtonDisabled,
+              ]}
+              onPress={() => setMatchupTeamType('singles')}
+              disabled={saving || teamType === 'doubles'}
+            >
+              <Text
+                style={[
+                  styles.teamTypeText,
+                  matchupTeamType === 'singles' && styles.teamTypeTextActive,
+                  teamType === 'doubles' && styles.teamTypeTextDisabled,
+                ]}
+              >
+                👤 Singles
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.teamTypeButton,
+                matchupTeamType === 'doubles' && styles.teamTypeButtonActive,
+                teamType === 'singles' && styles.teamTypeButtonDisabled,
+              ]}
+              onPress={() => setMatchupTeamType('doubles')}
+              disabled={saving || teamType === 'singles'}
+            >
+              <Text
+                style={[
+                  styles.teamTypeText,
+                  matchupTeamType === 'doubles' && styles.teamTypeTextActive,
+                  teamType === 'singles' && styles.teamTypeTextDisabled,
+                ]}
+              >
+                👥 Doubles
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.teamTypeButton,
+                matchupTeamType === 'teams' && styles.teamTypeButtonActive,
+                teamType !== 'teams' && styles.teamTypeButtonDisabled,
+              ]}
+              onPress={() => setMatchupTeamType('teams')}
+              disabled={saving || teamType !== 'teams'}
+            >
+              <Text
+                style={[
+                  styles.teamTypeText,
+                  matchupTeamType === 'teams' && styles.teamTypeTextActive,
+                  teamType !== 'teams' && styles.teamTypeTextDisabled,
+                ]}
+              >
+                👤👤👤 Team vs Team
               </Text>
             </TouchableOpacity>
           </View>

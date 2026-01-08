@@ -18,7 +18,17 @@ export default function CreateLadderScreen({ navigation }) {
   const [ladderName, setLadderName] = useState('');
   const [gameType, setGameType] = useState('tennis'); // 'tennis' or 'pickleball'
   const [teamType, setTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
+  const [matchupTeamType, setMatchupTeamType] = useState('singles'); // 'singles', 'doubles', or 'teams'
   const [nickname, setNickname] = useState('');
+
+  // Update matchupTeamType when teamType changes
+  const handleTeamTypeChange = (newTeamType) => {
+    setTeamType(newTeamType);
+    // Auto-set matchupTeamType to match teamType when not 'teams'
+    if (newTeamType === 'singles' || newTeamType === 'doubles') {
+      setMatchupTeamType(newTeamType);
+    }
+  };
   const [userFirstName, setUserFirstName] = useState('');
   const [userLastName, setUserLastName] = useState('');
   const [isPublic, setIsPublic] = useState(true); // true = public (1), false = private (0)
@@ -125,7 +135,7 @@ export default function CreateLadderScreen({ navigation }) {
       const finalNickname = nickname.trim() || defaultName;
 
       // Create ladder document in Firestore
-      const ladderDocRef = await addDoc(collection(db, 'ladders'), {
+      const ladderData = {
         name: ladderName.trim(),
         type: gameType,
         teamType: teamType,
@@ -133,7 +143,12 @@ export default function CreateLadderScreen({ navigation }) {
         joinCode: joinCode,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-      });
+      };
+
+      // Include matchupTeamType - it's set based on teamType
+      ladderData.matchupTeamType = matchupTeamType;
+
+      const ladderDocRef = await addDoc(collection(db, 'ladders'), ladderData);
 
       // Create laddermembers document for the creator (who is an admin)
       await addDoc(collection(db, 'laddermembers'), {
@@ -279,7 +294,7 @@ export default function CreateLadderScreen({ navigation }) {
                     styles.teamTypeButton,
                     teamType === 'singles' && styles.teamTypeButtonActive,
                   ]}
-                  onPress={() => setTeamType('singles')}
+                  onPress={() => handleTeamTypeChange('singles')}
                 >
                   <Text style={styles.teamTypeEmoji}>👤</Text>
                   <Text
@@ -297,7 +312,7 @@ export default function CreateLadderScreen({ navigation }) {
                     styles.teamTypeButton,
                     teamType === 'doubles' && styles.teamTypeButtonActive,
                   ]}
-                  onPress={() => setTeamType('doubles')}
+                  onPress={() => handleTeamTypeChange('doubles')}
                 >
                   <Text style={styles.teamTypeEmoji}>👥</Text>
                   <Text
@@ -316,7 +331,7 @@ export default function CreateLadderScreen({ navigation }) {
                     styles.teamTypeButtonLast,
                     teamType === 'teams' && styles.teamTypeButtonActive,
                   ]}
-                  onPress={() => setTeamType('teams')}
+                  onPress={() => handleTeamTypeChange('teams')}
                 >
                   <Text style={styles.teamTypeEmoji}>👤👤👤</Text>
                   <Text
@@ -326,6 +341,79 @@ export default function CreateLadderScreen({ navigation }) {
                     ]}
                   >
                     Teams (3+)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Matchup Team Type - always shown, options disabled based on teamType */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Matchup Team Type</Text>
+              <Text style={styles.inputHint}>
+                How are matchups structured within sessions?
+              </Text>
+              <View style={styles.teamTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    matchupTeamType === 'singles' && styles.teamTypeButtonActive,
+                    teamType === 'doubles' && styles.teamTypeButtonDisabled,
+                  ]}
+                  onPress={() => setMatchupTeamType('singles')}
+                  disabled={teamType === 'doubles'}
+                >
+                  <Text style={styles.teamTypeEmoji}>👤</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      matchupTeamType === 'singles' && styles.teamTypeTextActive,
+                      teamType === 'doubles' && styles.teamTypeTextDisabled,
+                    ]}
+                  >
+                    Singles
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    matchupTeamType === 'doubles' && styles.teamTypeButtonActive,
+                    teamType === 'singles' && styles.teamTypeButtonDisabled,
+                  ]}
+                  onPress={() => setMatchupTeamType('doubles')}
+                  disabled={teamType === 'singles'}
+                >
+                  <Text style={styles.teamTypeEmoji}>👥</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      matchupTeamType === 'doubles' && styles.teamTypeTextActive,
+                      teamType === 'singles' && styles.teamTypeTextDisabled,
+                    ]}
+                  >
+                    Doubles
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.teamTypeButton,
+                    styles.teamTypeButtonLast,
+                    matchupTeamType === 'teams' && styles.teamTypeButtonActive,
+                    teamType !== 'teams' && styles.teamTypeButtonDisabled,
+                  ]}
+                  onPress={() => setMatchupTeamType('teams')}
+                  disabled={teamType !== 'teams'}
+                >
+                  <Text style={styles.teamTypeEmoji}>👤👤👤</Text>
+                  <Text
+                    style={[
+                      styles.teamTypeText,
+                      matchupTeamType === 'teams' && styles.teamTypeTextActive,
+                      teamType !== 'teams' && styles.teamTypeTextDisabled,
+                    ]}
+                  >
+                    Team vs Team
                   </Text>
                 </TouchableOpacity>
               </View>
