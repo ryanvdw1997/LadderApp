@@ -141,8 +141,8 @@ export default function CreateMatchupScreen({ navigation }) {
     try {
       setSaving(true);
 
-      // Calculate expiration based on session settings
-      const expirationDays = session?.expirationDays || ladder?.matchExpirationDays || 7;
+      // Calculate expiration based on session settings only
+      const expirationDays = session?.expirationDays || 7;
       const createdAt = new Date();
       const expiresAt = new Date(createdAt);
       expiresAt.setDate(expiresAt.getDate() + expirationDays);
@@ -281,17 +281,13 @@ export default function CreateMatchupScreen({ navigation }) {
                   
                   return (
                     <TouchableOpacity
-                      key={isSingles ? item.userId : item.id}
+                      key={item.userId}
                       style={[
                         styles.itemButton,
                         isSelected && styles.itemButtonActive,
                       ]}
                       onPress={() => {
-                        if (isSingles) {
-                          setSelectedPlayer2(item);
-                        } else {
-                          setSelectedTeam2(item);
-                        }
+                        setSelectedPlayer2(item);
                         setError('');
                       }}
                       disabled={saving}
