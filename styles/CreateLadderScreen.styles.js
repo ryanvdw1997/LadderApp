@@ -189,6 +189,9 @@ export default StyleSheet.create({
       },
     }),
   },
+  teamTypeButtonDisabled: {
+    opacity: 0.4,
+  },
   teamTypeEmoji: {
     fontSize: 32,
     marginBottom: 6,
@@ -202,6 +205,10 @@ export default StyleSheet.create({
   teamTypeTextActive: {
     color: '#6C5CE7',
     fontWeight: 'bold',
+  },
+  teamTypeTextDisabled: {
+    color: '#5A5F7A',
+    opacity: 0.5,
   },
   visibilityContainer: {
   },

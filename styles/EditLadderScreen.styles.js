@@ -217,6 +217,9 @@ export default StyleSheet.create({
     borderColor: '#6C5CE7',
     backgroundColor: '#252A45',
   },
+  teamTypeButtonDisabled: {
+    opacity: 0.4,
+  },
   teamTypeText: {
     fontSize: 16,
     fontWeight: '600',
@@ -224,6 +227,10 @@ export default StyleSheet.create({
   },
   teamTypeTextActive: {
     color: '#6C5CE7',
+  },
+  teamTypeTextDisabled: {
+    color: '#5A5F7A',
+    opacity: 0.5,
   },
   toggleContainer: {
     flexDirection: 'row',
